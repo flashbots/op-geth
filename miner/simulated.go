@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
+	// "github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
 
@@ -20,9 +20,9 @@ var (
 )
 
 func (w *worker) simulateBundle(bundle types.MevBundle) (*types.SimulatedBundle, error) {
-	if bundle.BlockNumber.Int64() != rpc.PendingBlockNumber.Int64() {
-		return nil, ErrInvalidInclusion
-	}
+	// if bundle.BlockNumber.Int64() != rpc.PendingBlockNumber.Int64() {
+	// 	return nil, ErrInvalidInclusion
+	// }
 
 	header := w.chain.CurrentBlock()
 	statedb, err := w.chain.StateAt(header.Root)
