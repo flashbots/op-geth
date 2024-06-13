@@ -2,28 +2,23 @@ package miner
 
 import (
 	"errors"
+	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
 var (
-	ErrInvalidInclusion = errors.New("invalid inclusion")
-
 	ErrTxFailed       = errors.New("tx failed")
 	ErrNegativeProfit = errors.New("negative profit")
 	ErrInvalidBundle  = errors.New("invalid bundle")
 )
 
 func (w *worker) simulateBundle(bundle types.MevBundle) (*types.SimulatedBundle, error) {
-	// if bundle.BlockNumber.Int64() != rpc.PendingBlockNumber.Int64() {
-	// 	return nil, ErrInvalidInclusion
-	// }
-
 	header := w.chain.CurrentBlock()
 	statedb, err := w.chain.StateAt(header.Root)
 	if err != nil {
@@ -85,9 +80,10 @@ func (w *worker) simulateBundle(bundle types.MevBundle) (*types.SimulatedBundle,
 		ExecError:      execError,
 		OriginalBundle: bundle,
 	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if execError != "" && totalProfit.Sign() < 0 {
+	log.Info("simulated bundle", "bundle", bundle.Hash, "totalProfit", totalProfit, "gasUsed", gasUsed, "execError", execError)
+	if revert == nil && totalProfit.Sign() >= 0 {
+		w.mu.Lock()
+		defer w.mu.Unlock()
 		w.simulatedBundles = append(w.simulatedBundles, simBundle)
 	}
 	return simBundle, nil
@@ -106,7 +102,7 @@ func (w *worker) getTopBundle() (*types.SimulatedBundle, error) {
 	return nil, ErrInvalidBundle
 }
 
-func (w *worker) filterBundles() []*types.SimulatedBundle {
+func (w *worker) filterBundles(blockNumber *big.Int) []*types.SimulatedBundle {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -114,7 +110,8 @@ func (w *worker) filterBundles() []*types.SimulatedBundle {
 	var ret []*types.SimulatedBundle
 
 	for _, bundle := range w.simulatedBundles {
-		if bundle.OriginalBundle.BlockNumber.Cmp(w.current.header.Number) > 0 {
+		log.Info("filtering bundle", "bundle", bundle.OriginalBundle.Hash, "block", bundle.OriginalBundle.BlockNumber, "current", blockNumber.String())
+		if bundle.OriginalBundle.BlockNumber.Cmp(blockNumber) < 0 {
 			continue
 		}
 

@@ -338,7 +338,7 @@ func (b *EthAPIBackend) SendInteropBundle(ctx context.Context, txs types.Transac
 	if blockNumber == rpc.PendingBlockNumber {
 		bundle := types.MevBundle{
 			Txs:          txs,
-			BlockNumber:  big.NewInt(int64(b.eth.blockchain.CurrentBlock().Number.Uint64() + 1)),
+			BlockNumber:  big.NewInt(int64(b.eth.blockchain.CurrentBlock().Number.Uint64() + 2)),
 			MinTimestamp: minTimestamp,
 			MaxTimestamp: maxTimestamp,
 			Hash:         bundleHash,

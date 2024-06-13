@@ -1201,7 +1201,8 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
 	}
 
-	bundles := w.filterBundles()
+	log.Info("Trying to include bundles", "bundles", len(w.simulatedBundles))
+	bundles := w.filterBundles(env.header.Number)
 	for _, bundle := range bundles {
 		if err := w.commitBundle(env, bundle.OriginalBundle, interrupt); err != nil {
 			log.Warn("Failed to force-include bundle", "err", err)
@@ -1209,6 +1210,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		}
 		break
 	}
+	log.Info("included bundles", "bundles", len(bundles))
 
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
 	pendingPlainTxs := w.eth.TxPool().Pending(filter)
