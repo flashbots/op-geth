@@ -63,6 +63,8 @@ func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, seal
 		Random:       attrs.Random,
 		Withdrawals:  attrs.Withdrawals,
 		BeaconRoot:   attrs.ParentBeaconBlockRoot,
+		Transactions: attrs.Transactions,
+		NoTxPool:     attrs.NoTxPool,
 		BlockHook:    sealedBlockCallback,
 	}
 
