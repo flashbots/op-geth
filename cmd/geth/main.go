@@ -162,6 +162,38 @@ var (
 		utils.LogBacktraceAtFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
+	builderApiFlags = []cli.Flag{
+		utils.BuilderEnabled,
+		utils.BuilderAlgoTypeFlag,
+		utils.BuilderPriceCutoffPercentFlag,
+		utils.BuilderEnableValidatorChecks,
+		utils.BuilderBlockValidationBlacklistSourceFilePath,
+		utils.BuilderBlockValidationUseBalanceDiff,
+		utils.BuilderBlockValidationExcludeWithdrawals,
+		utils.BuilderEnableLocalRelay,
+		utils.BuilderSecondsInSlot,
+		utils.BuilderSlotsInEpoch,
+		utils.BuilderDisableBundleFetcher,
+		utils.BuilderDryRun,
+		utils.BuilderIgnoreLatePayloadAttributes,
+		utils.BuilderSecretKey,
+		utils.BuilderRelaySecretKey,
+		utils.BuilderListenAddr,
+		utils.BuilderGenesisForkVersion,
+		utils.BuilderBellatrixForkVersion,
+		utils.BuilderGenesisValidatorsRoot,
+		utils.BuilderBeaconEndpoints,
+		utils.BuilderRemoteRelayEndpoint,
+		utils.BuilderSecondaryRemoteRelayEndpoints,
+		utils.BuilderRateLimitDuration,
+		utils.BuilderRateLimitMaxBurst,
+		utils.BuilderBlockResubmitInterval,
+		utils.BuilderSubmissionOffset,
+		utils.BuilderDiscardRevertibleTxOnErr,
+		utils.BuilderEnableCancellations,
+		utils.BuilderBlockProcessorURL,
+	}
+
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
 		utils.HTTPListenAddrFlag,
@@ -258,6 +290,7 @@ func init() {
 	app.Flags = flags.Merge(
 		nodeFlags,
 		rpcFlags,
+		builderApiFlags,
 		consoleFlags,
 		debug.Flags,
 		metricsFlags,
