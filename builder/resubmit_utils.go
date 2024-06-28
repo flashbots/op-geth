@@ -35,6 +35,8 @@ func runResubmitLoop(ctx context.Context, limiter *rate.Limiter, updateSignal <-
 		return
 	}
 
+	log.Info("starting resubmit loop")
+
 	var res *rate.Reservation
 	for {
 		select {

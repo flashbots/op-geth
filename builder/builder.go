@@ -22,7 +22,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	blockvalidation "github.com/ethereum/go-ethereum/eth/block-validation"
 	"github.com/ethereum/go-ethereum/flashbotsextra"
@@ -42,7 +41,8 @@ const (
 	RateLimitBurstDefault        = 10
 	BlockResubmitIntervalDefault = 500 * time.Millisecond
 
-	SubmissionOffsetFromEndOfSlotSecondsDefault = 3 * time.Second
+	SubmissionOffsetFromEndOfSlotSecondsDefault = 1 * time.Second
+	BlockTime                                   = 2000 * time.Millisecond // TODO: Configure by flag.
 )
 
 type PubkeyHex string
@@ -198,6 +198,7 @@ func (b *Builder) Start() error {
 			case <-b.stop:
 				return
 			case payloadAttributes := <-c:
+				log.Info("Received payload attributes", "slot", payloadAttributes.Slot, "hash", payloadAttributes.HeadHash.String())
 				// Right now we are building only on a single head. This might change in the future!
 				if payloadAttributes.Slot < currentSlot {
 					continue
@@ -237,6 +238,7 @@ func (b *Builder) Stop() error {
 }
 
 func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
+	log.Info("OnSealedBlock", "slot", opts.PayloadAttributes.Slot, "parent", opts.PayloadAttributes.HeadHash.String(), "hash", opts.Block.Hash().String())
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
 	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
@@ -260,7 +262,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		BlockHash:            phase0.Hash32(opts.Block.Hash()),
 		BuilderPubkey:        b.builderPublicKey,
 		ProposerPubkey:       opts.ProposerPubkey,
-		ProposerFeeRecipient: opts.ValidatorData.FeeRecipient,
+		ProposerFeeRecipient: bellatrix.ExecutionAddress(opts.PayloadAttributes.SuggestedFeeRecipient),
 		GasLimit:             executableData.ExecutionPayload.GasLimit,
 		GasUsed:              executableData.ExecutionPayload.GasUsed,
 		Value:                value,
@@ -275,11 +277,11 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	if b.dryRun {
 		switch dataVersion {
 		case spec.DataVersionBellatrix:
-			err = b.validator.ValidateBuilderSubmissionV1(&blockvalidation.BuilderBlockValidationRequest{SubmitBlockRequest: *versionedBlockRequest.Bellatrix, RegisteredGasLimit: opts.ValidatorData.GasLimit})
+			err = b.validator.ValidateBuilderSubmissionV1(&blockvalidation.BuilderBlockValidationRequest{SubmitBlockRequest: *versionedBlockRequest.Bellatrix, RegisteredGasLimit: opts.PayloadAttributes.GasLimit})
 		case spec.DataVersionCapella:
-			err = b.validator.ValidateBuilderSubmissionV2(&blockvalidation.BuilderBlockValidationRequestV2{SubmitBlockRequest: *versionedBlockRequest.Capella, RegisteredGasLimit: opts.ValidatorData.GasLimit})
+			err = b.validator.ValidateBuilderSubmissionV2(&blockvalidation.BuilderBlockValidationRequestV2{SubmitBlockRequest: *versionedBlockRequest.Capella, RegisteredGasLimit: opts.PayloadAttributes.GasLimit})
 		case spec.DataVersionDeneb:
-			err = b.validator.ValidateBuilderSubmissionV3(&blockvalidation.BuilderBlockValidationRequestV3{SubmitBlockRequest: *versionedBlockRequest.Deneb, RegisteredGasLimit: opts.ValidatorData.GasLimit, ParentBeaconBlockRoot: *opts.Block.BeaconRoot()})
+			err = b.validator.ValidateBuilderSubmissionV3(&blockvalidation.BuilderBlockValidationRequestV3{SubmitBlockRequest: *versionedBlockRequest.Deneb, RegisteredGasLimit: opts.PayloadAttributes.GasLimit, ParentBeaconBlockRoot: *opts.Block.BeaconRoot()})
 		}
 		if err != nil {
 			log.Error("could not validate block", "version", dataVersion.String(), "err", err)
@@ -364,13 +366,9 @@ func (b *Builder) processBuiltBlock(block *types.Block, blockValue *big.Int, ord
 }
 
 func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) error {
+	log.Info("Payload attribute received", "slot", attrs.Slot, "hash", attrs.HeadHash.String())
 	if attrs == nil {
 		return nil
-	}
-
-	vd, err := b.relay.GetValidatorForSlot(attrs.Slot)
-	if err != nil {
-		return fmt.Errorf("could not get validator while submitting block for slot %d - %w", attrs.Slot, err)
 	}
 
 	parentBlock := b.eth.GetBlockByHash(attrs.HeadHash)
@@ -378,13 +376,8 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		return fmt.Errorf("parent block hash not found in block tree given head block hash %s", attrs.HeadHash)
 	}
 
-	attrs.SuggestedFeeRecipient = [20]byte(vd.FeeRecipient)
-	attrs.GasLimit = core.CalcGasLimit(parentBlock.GasLimit(), vd.GasLimit)
-
-	proposerPubkey, err := utils.HexToPubkey(string(vd.Pubkey))
-	if err != nil {
-		return fmt.Errorf("could not parse pubkey (%s) - %w", vd.Pubkey, err)
-	}
+	proposerPubkey := phase0.BLSPubKey{}
+	vd := ValidatorData{}
 
 	if !b.eth.Synced() {
 		return errors.New("backend not Synced")
@@ -402,7 +395,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		b.slotCtxCancel()
 	}
 
-	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), 12*time.Second)
+	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), BlockTime*time.Second)
 	b.slotAttrs = *attrs
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
@@ -423,7 +416,7 @@ type blockQueueEntry struct {
 }
 
 func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.BLSPubKey, vd ValidatorData, attrs *types.BuilderPayloadAttributes) {
-	ctx, cancel := context.WithTimeout(slotCtx, 12*time.Second)
+	ctx, cancel := context.WithTimeout(slotCtx, BlockTime*time.Second)
 	defer cancel()
 
 	// Submission queue for the given payload attributes
@@ -441,7 +434,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 		queueBestEntry         blockQueueEntry
 	)
 
-	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
+	log.Info("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
 	submitBestBlock := func() {
 		queueMu.Lock()
@@ -474,6 +467,10 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	// not begin until 8 seconds into the slot.
 	slotTime := time.Unix(int64(attrs.Timestamp), 0).UTC()
 	slotSubmitStartTime := slotTime.Add(-b.submissionOffsetFromEndOfSlot)
+
+	currentTime := time.Now().UTC()
+
+	log.Info("slotSubmitStartTime", "slot", attrs.Slot, "parent", attrs.HeadHash, "currentTime", currentTime, "submitStartTime", slotSubmitStartTime)
 
 	// Empties queue, submits the best block for current job with rate limit (global for all jobs)
 	go runResubmitLoop(ctx, b.limiter, queueSignal, submitBestBlock, slotSubmitStartTime)
@@ -511,7 +508,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 	// resubmits block builder requests every builderBlockResubmitInterval
 	runRetryLoop(ctx, b.builderResubmitInterval, func() {
-		log.Debug("retrying BuildBlock",
+		log.Info("retrying BuildBlock",
 			"slot", attrs.Slot,
 			"parent", attrs.HeadHash,
 			"resubmit-interval", b.builderResubmitInterval.String())

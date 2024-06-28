@@ -132,7 +132,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if err := backend.TxPool().Add([]*types.Transaction{tx}, true, false); err != nil {
+		if err := backend.TxPool().Add([]*types.Transaction{tx}, true, false, false); err != nil {
 			panic(err)
 		}
 		nonces[index]++

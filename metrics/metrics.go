@@ -29,6 +29,8 @@ var Enabled = false
 // for health monitoring and debug metrics that might impact runtime performance.
 var EnabledExpensive = false
 
+var EnabledBuilder = false
+
 // enablerFlags is the CLI flag names to use to enable metrics collections.
 var enablerFlags = []string{"metrics"}
 

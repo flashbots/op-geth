@@ -13,14 +13,16 @@ import (
 	"time"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
-	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	eth2ApiV1Bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
+	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilBellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
+	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -59,8 +61,8 @@ type LocalRelay struct {
 	enableBeaconChecks bool
 
 	bestDataLock sync.Mutex
-	bestHeader   *bellatrix.ExecutionPayloadHeader
-	bestPayload  *bellatrix.ExecutionPayload
+	bestHeader   *deneb.ExecutionPayloadHeader
+	bestPayload  *deneb.ExecutionPayload
 	profit       *uint256.Int
 
 	indexTemplate *template.Template
@@ -112,8 +114,8 @@ func (r *LocalRelay) Stop() {
 }
 
 func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _ ValidatorData) error {
-	log.Info("submitting block to local relay", "block", msg.Bellatrix.ExecutionPayload.BlockHash.String())
-	return r.submitBlock(msg.Bellatrix)
+	log.Info("submitting block to local relay", "block", msg.Deneb.ExecutionPayload.BlockHash.String())
+	return r.submitBlock(msg.Deneb)
 }
 
 func (r *LocalRelay) Config() RelayConfig {
@@ -121,7 +123,7 @@ func (r *LocalRelay) Config() RelayConfig {
 	return RelayConfig{}
 }
 
-func (r *LocalRelay) submitBlock(msg *builderApiBellatrix.SubmitBlockRequest) error {
+func (r *LocalRelay) submitBlock(msg *builderApiDeneb.SubmitBlockRequest) error {
 	header, err := PayloadToPayloadHeader(msg.ExecutionPayload)
 	if err != nil {
 		log.Error("could not convert payload to header", "err", err)
@@ -268,7 +270,7 @@ func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	bid := builderApiBellatrix.BuilderBid{
+	bid := builderApiDeneb.BuilderBid{
 		Header: bestHeader,
 		Value:  profit,
 		Pubkey: r.relayPublicKey,
@@ -280,8 +282,8 @@ func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	response := &builderSpec.VersionedSignedBuilderBid{
-		Version:   spec.DataVersionBellatrix,
-		Bellatrix: &builderApiBellatrix.SignedBuilderBid{Message: &bid, Signature: signature},
+		Version: spec.DataVersionDeneb,
+		Deneb:   &builderApiDeneb.SignedBuilderBid{Message: &bid, Signature: signature},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -293,7 +295,7 @@ func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *LocalRelay) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	payload := new(eth2ApiV1Bellatrix.SignedBlindedBeaconBlock)
+	payload := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		log.Error("failed to decode payload", "error", err)
 		respondError(w, http.StatusBadRequest, "invalid payload")
@@ -347,8 +349,54 @@ func (r *LocalRelay) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	response := &builderApi.VersionedExecutionPayload{
-		Version:   spec.DataVersionBellatrix,
-		Bellatrix: bestPayload,
+		Version: spec.DataVersionBellatrix,
+		Deneb:   bestPayload,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+}
+
+func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Request) {
+	// TODO: check api
+	vars := mux.Vars(req)
+	slot, err := strconv.Atoi(vars["slot"])
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "incorrect slot")
+		return
+	}
+	parentHashHex := vars["parent_hash"]
+
+	r.bestDataLock.Lock()
+	bestHeader := r.bestHeader
+	bestPayload := r.bestPayload
+	r.bestDataLock.Unlock()
+
+	log.Info("Received unblinded(trusted) block request", "bestHeader", bestHeader, "bestPayload", bestPayload)
+
+	if bestHeader == nil || bestPayload == nil {
+		respondError(w, http.StatusInternalServerError, "no payloads")
+		return
+	}
+
+	if bestHeader.BlockNumber != uint64(slot) {
+		respondError(w, http.StatusBadRequest, "slot not equal")
+		return
+	}
+
+	if bestHeader.ParentHash.String() != parentHashHex {
+		respondError(w, http.StatusBadRequest, "parent hash not equal")
+		return
+	}
+
+	response := &builderApi.VersionedExecutionPayload{
+		Version: spec.DataVersionDeneb,
+		Deneb:   bestPayload,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -419,12 +467,12 @@ func (r *LocalRelay) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func ExecutionPayloadHeaderEqual(l, r *bellatrix.ExecutionPayloadHeader) bool {
-	return l.ParentHash == r.ParentHash && l.FeeRecipient == r.FeeRecipient && l.StateRoot == r.StateRoot && l.ReceiptsRoot == r.ReceiptsRoot && l.LogsBloom == r.LogsBloom && l.PrevRandao == r.PrevRandao && l.BlockNumber == r.BlockNumber && l.GasLimit == r.GasLimit && l.GasUsed == r.GasUsed && l.Timestamp == r.Timestamp && l.BaseFeePerGas == r.BaseFeePerGas && bytes.Equal(l.ExtraData, r.ExtraData) && l.BlockHash == r.BlockHash && l.TransactionsRoot == r.TransactionsRoot
+func ExecutionPayloadHeaderEqual(l, r *deneb.ExecutionPayloadHeader) bool {
+	return l.ParentHash == r.ParentHash && l.FeeRecipient == r.FeeRecipient && l.StateRoot == r.StateRoot && l.ReceiptsRoot == r.ReceiptsRoot && l.LogsBloom == r.LogsBloom && l.PrevRandao == r.PrevRandao && l.BlockNumber == r.BlockNumber && l.GasLimit == r.GasLimit && l.GasUsed == r.GasUsed && l.Timestamp == r.Timestamp && l.BaseFeePerGas == r.BaseFeePerGas && bytes.Equal(l.ExtraData, r.ExtraData) && l.BlockHash == r.BlockHash && l.TransactionsRoot == r.TransactionsRoot && l.WithdrawalsRoot == r.WithdrawalsRoot && l.BlobGasUsed == r.BlobGasUsed && l.ExcessBlobGas == r.ExcessBlobGas
 }
 
 // PayloadToPayloadHeader converts an ExecutionPayload to ExecutionPayloadHeader
-func PayloadToPayloadHeader(p *bellatrix.ExecutionPayload) (*bellatrix.ExecutionPayloadHeader, error) {
+func PayloadToPayloadHeader(p *deneb.ExecutionPayload) (*deneb.ExecutionPayloadHeader, error) {
 	if p == nil {
 		return nil, errors.New("nil payload")
 	}
@@ -438,7 +486,13 @@ func PayloadToPayloadHeader(p *bellatrix.ExecutionPayload) (*bellatrix.Execution
 		return nil, err
 	}
 
-	return &bellatrix.ExecutionPayloadHeader{
+	withdrawals := eth2UtilCapella.ExecutionPayloadWithdrawals{Withdrawals: p.Withdrawals}
+	wdr, err := withdrawals.HashTreeRoot()
+	if err != nil {
+		return nil, err
+	}
+
+	return &deneb.ExecutionPayloadHeader{
 		ParentHash:       p.ParentHash,
 		FeeRecipient:     p.FeeRecipient,
 		StateRoot:        p.StateRoot,
@@ -453,5 +507,8 @@ func PayloadToPayloadHeader(p *bellatrix.ExecutionPayload) (*bellatrix.Execution
 		BaseFeePerGas:    p.BaseFeePerGas,
 		BlockHash:        p.BlockHash,
 		TransactionsRoot: txroot,
+		WithdrawalsRoot:  wdr,
+		BlobGasUsed:      p.BlobGasUsed,
+		ExcessBlobGas:    p.ExcessBlobGas,
 	}, nil
 }
