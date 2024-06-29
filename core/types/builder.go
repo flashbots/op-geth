@@ -14,10 +14,10 @@ type BuilderPayloadAttributes struct {
 	HeadHash              common.Hash    `json:"blockHash"`
 	Withdrawals           Withdrawals    `json:"withdrawals"`
 	ParentBeaconBlockRoot *common.Hash   `json:"parentBeaconBlockRoot"`
-	GasLimit              uint64
+	GasLimit              uint64         `json:"gasLimit"`
 
-	NoTxPool     bool           // Optimism addition: option to disable tx pool contents from being included
-	Transactions []*Transaction // Optimism addition: txs forced into the block via engine API
+	NoTxPool     bool           `json:"noTxPool,omitempty"` // Optimism addition: option to disable tx pool contents from being included
+	Transactions []*Transaction `json:"transactions"`       // Optimism addition: txs forced into the block via engine API
 }
 
 func (attrs *BuilderPayloadAttributes) Equal(other *BuilderPayloadAttributes) bool {

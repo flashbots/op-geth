@@ -1524,37 +1524,37 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 		)
 
 		newEnv, blockBundles, usedSbundle = builder.buildBlock(bundlesToConsider, sbundlesToConsider, pending)
-	case ALGO_GREEDY_BUCKETS_MULTISNAP:
-		priceCutoffPercent := w.config.PriceCutoffPercent
-		if !(priceCutoffPercent >= 0 && priceCutoffPercent <= 100) {
-			return nil, nil, nil, nil, errors.New("invalid price cutoff percent - must be between 0 and 100")
-		}
-
-		algoConf := &algorithmConfig{
-			DropRevertibleTxOnErr:  w.config.DiscardRevertibleTxOnErr,
-			EnforceProfit:          true,
-			ProfitThresholdPercent: defaultProfitThresholdPercent,
-			PriceCutoffPercent:     priceCutoffPercent,
-		}
-		builder := newGreedyBucketsMultiSnapBuilder(
-			w.chain, w.chainConfig, algoConf, w.blockList, env,
-			w.config.BuilderTxSigningKey, interrupt,
-		)
-		newEnv, blockBundles, usedSbundle = builder.buildBlock(bundlesToConsider, sbundlesToConsider, pending)
-	case ALGO_GREEDY_MULTISNAP:
-		// For greedy multi-snap builder, set algorithm configuration to default values,
-		// except DropRevertibleTxOnErr which is passed in from worker config
-		algoConf := &algorithmConfig{
-			DropRevertibleTxOnErr:  w.config.DiscardRevertibleTxOnErr,
-			EnforceProfit:          defaultAlgorithmConfig.EnforceProfit,
-			ProfitThresholdPercent: defaultAlgorithmConfig.ProfitThresholdPercent,
-		}
-
-		builder := newGreedyMultiSnapBuilder(
-			w.chain, w.chainConfig, algoConf, w.blockList, env,
-			w.config.BuilderTxSigningKey, interrupt,
-		)
-		newEnv, blockBundles, usedSbundle = builder.buildBlock(bundlesToConsider, sbundlesToConsider, pending)
+	// case ALGO_GREEDY_BUCKETS_MULTISNAP:
+	// 	priceCutoffPercent := w.config.PriceCutoffPercent
+	// 	if !(priceCutoffPercent >= 0 && priceCutoffPercent <= 100) {
+	// 		return nil, nil, nil, nil, errors.New("invalid price cutoff percent - must be between 0 and 100")
+	// 	}
+	//
+	// 	algoConf := &algorithmConfig{
+	// 		DropRevertibleTxOnErr:  w.config.DiscardRevertibleTxOnErr,
+	// 		EnforceProfit:          true,
+	// 		ProfitThresholdPercent: defaultProfitThresholdPercent,
+	// 		PriceCutoffPercent:     priceCutoffPercent,
+	// 	}
+	// 	builder := newGreedyBucketsMultiSnapBuilder(
+	// 		w.chain, w.chainConfig, algoConf, w.blockList, env,
+	// 		w.config.BuilderTxSigningKey, interrupt,
+	// 	)
+	// 	newEnv, blockBundles, usedSbundle = builder.buildBlock(bundlesToConsider, sbundlesToConsider, pending)
+	// case ALGO_GREEDY_MULTISNAP:
+	// 	// For greedy multi-snap builder, set algorithm configuration to default values,
+	// 	// except DropRevertibleTxOnErr which is passed in from worker config
+	// 	algoConf := &algorithmConfig{
+	// 		DropRevertibleTxOnErr:  w.config.DiscardRevertibleTxOnErr,
+	// 		EnforceProfit:          defaultAlgorithmConfig.EnforceProfit,
+	// 		ProfitThresholdPercent: defaultAlgorithmConfig.ProfitThresholdPercent,
+	// 	}
+	//
+	// 	builder := newGreedyMultiSnapBuilder(
+	// 		w.chain, w.chainConfig, algoConf, w.blockList, env,
+	// 		w.config.BuilderTxSigningKey, interrupt,
+	// 	)
+	// 	newEnv, blockBundles, usedSbundle = builder.buildBlock(bundlesToConsider, sbundlesToConsider, pending)
 	case ALGO_GREEDY:
 		fallthrough
 	default:
@@ -1624,6 +1624,8 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	}
 
 	misc.EnsureCreate2Deployer(w.chainConfig, work.header.Time, work.state)
+
+	log.Info("Number of txs in attrs", "numTxs", len(params.txs))
 
 	for _, tx := range params.txs {
 		from, _ := types.Sender(work.signer, tx)
@@ -1697,6 +1699,11 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 		if from == work.coinbase {
 			mempoolTxHashes[tx.Hash()] = struct{}{}
 		}
+	}
+
+	// also mark the forced included transactions as mempool transactions to pass bundle validation
+	for _, tx := range params.txs {
+		mempoolTxHashes[tx.Hash()] = struct{}{}
 	}
 
 	err = VerifyBundlesAtomicity(work, blockBundles, allBundles, usedSbundles, mempoolTxHashes)

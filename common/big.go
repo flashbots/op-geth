@@ -32,5 +32,11 @@ var (
 	Big256 = big.NewInt(256)
 	Big257 = big.NewInt(257)
 
-	U2560 = uint256.NewInt(0)
+	U2560   = uint256.NewInt(0)
+	U256100 = uint256.NewInt(100)
 )
+
+func PercentOf(val *uint256.Int, percent int) *uint256.Int {
+	res := new(uint256.Int).Mul(val, uint256.NewInt(uint64(percent)))
+	return new(uint256.Int).Div(res, U256100)
+}

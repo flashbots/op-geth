@@ -13,13 +13,13 @@ import (
 	"time"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
-	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilBellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
@@ -61,8 +61,8 @@ type LocalRelay struct {
 	enableBeaconChecks bool
 
 	bestDataLock sync.Mutex
-	bestHeader   *deneb.ExecutionPayloadHeader
-	bestPayload  *deneb.ExecutionPayload
+	bestHeader   *capella.ExecutionPayloadHeader
+	bestPayload  *capella.ExecutionPayload
 	profit       *uint256.Int
 
 	indexTemplate *template.Template
@@ -114,8 +114,8 @@ func (r *LocalRelay) Stop() {
 }
 
 func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _ ValidatorData) error {
-	log.Info("submitting block to local relay", "block", msg.Deneb.ExecutionPayload.BlockHash.String())
-	return r.submitBlock(msg.Deneb)
+	log.Info("submitting block to local relay", "msg", msg, "version", msg.Version)
+	return r.submitBlock(msg.Capella)
 }
 
 func (r *LocalRelay) Config() RelayConfig {
@@ -123,7 +123,7 @@ func (r *LocalRelay) Config() RelayConfig {
 	return RelayConfig{}
 }
 
-func (r *LocalRelay) submitBlock(msg *builderApiDeneb.SubmitBlockRequest) error {
+func (r *LocalRelay) submitBlock(msg *builderApiCapella.SubmitBlockRequest) error {
 	header, err := PayloadToPayloadHeader(msg.ExecutionPayload)
 	if err != nil {
 		log.Error("could not convert payload to header", "err", err)
@@ -270,7 +270,7 @@ func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	bid := builderApiDeneb.BuilderBid{
+	bid := builderApiCapella.BuilderBid{
 		Header: bestHeader,
 		Value:  profit,
 		Pubkey: r.relayPublicKey,
@@ -282,8 +282,8 @@ func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	}
 
 	response := &builderSpec.VersionedSignedBuilderBid{
-		Version: spec.DataVersionDeneb,
-		Deneb:   &builderApiDeneb.SignedBuilderBid{Message: &bid, Signature: signature},
+		Version: spec.DataVersionCapella,
+		Capella: &builderApiCapella.SignedBuilderBid{Message: &bid, Signature: signature},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -295,7 +295,7 @@ func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *LocalRelay) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	payload := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
+	payload := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		log.Error("failed to decode payload", "error", err)
 		respondError(w, http.StatusBadRequest, "invalid payload")
@@ -349,8 +349,8 @@ func (r *LocalRelay) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	response := &builderApi.VersionedExecutionPayload{
-		Version: spec.DataVersionBellatrix,
-		Deneb:   bestPayload,
+		Version: spec.DataVersionCapella,
+		Capella: bestPayload,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -395,8 +395,8 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 	}
 
 	response := &builderApi.VersionedExecutionPayload{
-		Version: spec.DataVersionDeneb,
-		Deneb:   bestPayload,
+		Version: spec.DataVersionCapella,
+		Capella: bestPayload,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -467,12 +467,12 @@ func (r *LocalRelay) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func ExecutionPayloadHeaderEqual(l, r *deneb.ExecutionPayloadHeader) bool {
-	return l.ParentHash == r.ParentHash && l.FeeRecipient == r.FeeRecipient && l.StateRoot == r.StateRoot && l.ReceiptsRoot == r.ReceiptsRoot && l.LogsBloom == r.LogsBloom && l.PrevRandao == r.PrevRandao && l.BlockNumber == r.BlockNumber && l.GasLimit == r.GasLimit && l.GasUsed == r.GasUsed && l.Timestamp == r.Timestamp && l.BaseFeePerGas == r.BaseFeePerGas && bytes.Equal(l.ExtraData, r.ExtraData) && l.BlockHash == r.BlockHash && l.TransactionsRoot == r.TransactionsRoot && l.WithdrawalsRoot == r.WithdrawalsRoot && l.BlobGasUsed == r.BlobGasUsed && l.ExcessBlobGas == r.ExcessBlobGas
+func ExecutionPayloadHeaderEqual(l, r *capella.ExecutionPayloadHeader) bool {
+	return l.ParentHash == r.ParentHash && l.FeeRecipient == r.FeeRecipient && l.StateRoot == r.StateRoot && l.ReceiptsRoot == r.ReceiptsRoot && l.LogsBloom == r.LogsBloom && l.PrevRandao == r.PrevRandao && l.BlockNumber == r.BlockNumber && l.GasLimit == r.GasLimit && l.GasUsed == r.GasUsed && l.Timestamp == r.Timestamp && l.BaseFeePerGas == r.BaseFeePerGas && bytes.Equal(l.ExtraData, r.ExtraData) && l.BlockHash == r.BlockHash && l.TransactionsRoot == r.TransactionsRoot && l.WithdrawalsRoot == r.WithdrawalsRoot
 }
 
 // PayloadToPayloadHeader converts an ExecutionPayload to ExecutionPayloadHeader
-func PayloadToPayloadHeader(p *deneb.ExecutionPayload) (*deneb.ExecutionPayloadHeader, error) {
+func PayloadToPayloadHeader(p *capella.ExecutionPayload) (*capella.ExecutionPayloadHeader, error) {
 	if p == nil {
 		return nil, errors.New("nil payload")
 	}
@@ -492,7 +492,7 @@ func PayloadToPayloadHeader(p *deneb.ExecutionPayload) (*deneb.ExecutionPayloadH
 		return nil, err
 	}
 
-	return &deneb.ExecutionPayloadHeader{
+	return &capella.ExecutionPayloadHeader{
 		ParentHash:       p.ParentHash,
 		FeeRecipient:     p.FeeRecipient,
 		StateRoot:        p.StateRoot,
@@ -508,7 +508,5 @@ func PayloadToPayloadHeader(p *deneb.ExecutionPayload) (*deneb.ExecutionPayloadH
 		BlockHash:        p.BlockHash,
 		TransactionsRoot: txroot,
 		WithdrawalsRoot:  wdr,
-		BlobGasUsed:      p.BlobGasUsed,
-		ExcessBlobGas:    p.ExcessBlobGas,
 	}, nil
 }

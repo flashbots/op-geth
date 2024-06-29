@@ -117,6 +117,8 @@ type StateDB struct {
 	validRevisions []revision
 	nextRevisionId int
 
+	multiTxSnapshotStack *MultiTxSnapshotStack
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads         time.Duration
 	AccountHashes        time.Duration
@@ -1390,6 +1392,25 @@ func (s *StateDB) convertAccountSet(set map[common.Address]*types.StateAccount) 
 func (s *StateDB) OpenStorageTrie(addr common.Address) (Trie, error) {
 	storageRoot := s.GetStorageRoot(addr)
 	return s.db.OpenStorageTrie(s.originalRoot, addr, storageRoot, s.trie)
+}
+
+func (s *StateDB) NewMultiTxSnapshot() (err error) {
+	_, err = s.multiTxSnapshotStack.NewSnapshot()
+	return
+}
+
+func (s *StateDB) MultiTxSnapshotRevert() (err error) {
+	_, err = s.multiTxSnapshotStack.Revert()
+	return
+}
+
+func (s *StateDB) MultiTxSnapshotCommit() (err error) {
+	_, err = s.multiTxSnapshotStack.Commit()
+	return
+}
+
+func (s *StateDB) MultiTxSnapshotStackSize() int {
+	return s.multiTxSnapshotStack.Size()
 }
 
 // copySet returns a deep-copied set.

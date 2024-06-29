@@ -98,7 +98,7 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		parentHash:  args.Parent,
 		coinbase:    args.FeeRecipient,
 		random:      args.Random,
-		gasLimit:    *args.GasLimit,
+		gasLimit:    args.GasLimit,
 		withdrawals: args.Withdrawals,
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
@@ -137,8 +137,9 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			random:      args.Random,
 			withdrawals: args.Withdrawals,
 			beaconRoot:  args.BeaconRoot,
-			gasLimit:    *args.GasLimit,
+			gasLimit:    args.GasLimit,
 			noTxs:       false,
+			txs:         args.Transactions,
 			onBlock:     args.BlockHook,
 		}
 

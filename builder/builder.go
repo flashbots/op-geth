@@ -241,13 +241,14 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	log.Info("OnSealedBlock", "slot", opts.PayloadAttributes.Slot, "parent", opts.PayloadAttributes.HeadHash.String(), "hash", opts.Block.Hash().String())
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
-	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
-		dataVersion = spec.DataVersionDeneb
-	} else if b.eth.Config().IsShanghai(opts.Block.Number(), opts.Block.Time()) {
-		dataVersion = spec.DataVersionCapella
-	} else {
-		dataVersion = spec.DataVersionBellatrix
-	}
+	// if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
+	// 	dataVersion = spec.DataVersionDeneb
+	// } else if b.eth.Config().IsShanghai(opts.Block.Number(), opts.Block.Time()) {
+	// 	dataVersion = spec.DataVersionCapella
+	// } else {
+	// 	dataVersion = spec.DataVersionBellatrix
+	// }
+	dataVersion = spec.DataVersionCapella
 
 	value, overflow := uint256.FromBig(opts.BlockValue)
 	if overflow {
@@ -366,7 +367,7 @@ func (b *Builder) processBuiltBlock(block *types.Block, blockValue *big.Int, ord
 }
 
 func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) error {
-	log.Info("Payload attribute received", "slot", attrs.Slot, "hash", attrs.HeadHash.String())
+	log.Info("Payload attribute received", "slot", attrs.Slot, "hash", attrs.HeadHash.String(), "txs", attrs.Transactions)
 	if attrs == nil {
 		return nil
 	}
@@ -434,7 +435,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 		queueBestEntry         blockQueueEntry
 	)
 
-	log.Info("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
+	log.Info("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp), "txs", attrs.Transactions)
 
 	submitBestBlock := func() {
 		queueMu.Lock()
