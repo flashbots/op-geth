@@ -202,6 +202,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideVerkle = &v
 	}
 
+	log.Info("Registering Ethereum backend")
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth, &cfg.Builder)
 
 	// Create gauge with geth system and build information
