@@ -2275,7 +2275,9 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, bpCfg *builder.
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
 
+	log.Info("builder config", "bpCfg", bpCfg.Enabled)
 	if bpCfg.Enabled {
+		log.Info("Registering the builder service")
 		if err := builder.Register(stack, backend, bpCfg); err != nil {
 			Fatalf("Failed to register the builder service: %v", err)
 		}
