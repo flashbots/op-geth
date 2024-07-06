@@ -430,6 +430,7 @@ type OpBeaconClient struct {
 }
 
 func NewOpBeaconClient(endpoint string) *OpBeaconClient {
+	log.Info("creating opbeacon client", "endpoint", endpoint)
 	ctx, cancelFn := context.WithCancel(context.Background())
 	return &OpBeaconClient{
 		ctx:      ctx,

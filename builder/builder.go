@@ -186,6 +186,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 }
 
 func (b *Builder) Start() error {
+	log.Info("Starting builder")
 	// Start regular payload attributes updates
 	go func() {
 		c := make(chan types.BuilderPayloadAttributes)
