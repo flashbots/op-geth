@@ -387,13 +387,13 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 
 	if bestHeader.BlockNumber != uint64(slot) {
 		log.Error("slot not equal", "requested", slot, "best", bestHeader.BlockNumber)
-		respondError(w, http.StatusBadRequest, "slot not equal")
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("slot not equal requested: %d bestPayload: %d", slot, bestHeader.BlockNumber))
 		return
 	}
 
 	if bestHeader.ParentHash.String() != parentHashHex {
 		log.Error("parent hash not equal", "requested", parentHashHex, "best", bestHeader.ParentHash.String())
-		respondError(w, http.StatusBadRequest, "parent hash not equal")
+		respondError(w, http.StatusBadRequest, fmt.Sprintf("parent hash not equal requested: %s bestPayload: %s", parentHashHex, bestHeader.ParentHash.String()))
 		return
 	}
 
