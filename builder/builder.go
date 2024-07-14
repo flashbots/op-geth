@@ -41,7 +41,7 @@ const (
 	RateLimitBurstDefault        = 10
 	BlockResubmitIntervalDefault = 500 * time.Millisecond
 
-	SubmissionOffsetFromEndOfSlotSecondsDefault = 1 * time.Second
+	SubmissionOffsetFromEndOfSlotSecondsDefault = 100 * time.Millisecond
 	BlockTime                                   = 2000 * time.Millisecond // TODO: Configure by flag.
 )
 
