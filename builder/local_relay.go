@@ -380,16 +380,19 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 	log.Info("Received unblinded(trusted) block request", "bestHeader", bestHeader, "bestPayload", bestPayload)
 
 	if bestHeader == nil || bestPayload == nil {
+		log.Error("no payloads")
 		respondError(w, http.StatusInternalServerError, "no payloads")
 		return
 	}
 
 	if bestHeader.BlockNumber != uint64(slot) {
+		log.Error("slot not equal", "requested", slot, "best", bestHeader.BlockNumber)
 		respondError(w, http.StatusBadRequest, "slot not equal")
 		return
 	}
 
 	if bestHeader.ParentHash.String() != parentHashHex {
+		log.Error("parent hash not equal", "requested", parentHashHex, "best", bestHeader.ParentHash.String())
 		respondError(w, http.StatusBadRequest, "parent hash not equal")
 		return
 	}
@@ -403,6 +406,7 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Error("could not encode response", "err", err)
 		respondError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
