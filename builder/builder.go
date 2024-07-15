@@ -242,14 +242,13 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	log.Info("OnSealedBlock", "slot", opts.PayloadAttributes.Slot, "parent", opts.PayloadAttributes.HeadHash.String(), "hash", opts.Block.Hash().String())
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
-	// if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
-	// 	dataVersion = spec.DataVersionDeneb
-	// } else if b.eth.Config().IsShanghai(opts.Block.Number(), opts.Block.Time()) {
-	// 	dataVersion = spec.DataVersionCapella
-	// } else {
-	// 	dataVersion = spec.DataVersionBellatrix
-	// }
-	dataVersion = spec.DataVersionCapella
+	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
+		dataVersion = spec.DataVersionDeneb
+	} else if b.eth.Config().IsShanghai(opts.Block.Number(), opts.Block.Time()) {
+		dataVersion = spec.DataVersionCapella
+	} else {
+		dataVersion = spec.DataVersionBellatrix
+	}
 
 	value, overflow := uint256.FromBig(opts.BlockValue)
 	if overflow {

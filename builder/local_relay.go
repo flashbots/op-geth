@@ -13,13 +13,12 @@ import (
 	"time"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
-	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilBellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	eth2UtilCapella "github.com/attestantio/go-eth2-client/util/capella"
@@ -61,8 +60,8 @@ type LocalRelay struct {
 	enableBeaconChecks bool
 
 	bestDataLock sync.Mutex
-	bestHeader   *capella.ExecutionPayloadHeader
-	bestPayload  *capella.ExecutionPayload
+	bestHeader   *deneb.ExecutionPayloadHeader
+	bestPayload  *deneb.ExecutionPayload
 	profit       *uint256.Int
 
 	indexTemplate *template.Template
@@ -115,7 +114,7 @@ func (r *LocalRelay) Stop() {
 
 func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _ ValidatorData) error {
 	log.Info("submitting block to local relay", "msg", msg, "version", msg.Version)
-	return r.submitBlock(msg.Capella)
+	return r.submitBlock(msg.Deneb)
 }
 
 func (r *LocalRelay) Config() RelayConfig {
@@ -123,7 +122,7 @@ func (r *LocalRelay) Config() RelayConfig {
 	return RelayConfig{}
 }
 
-func (r *LocalRelay) submitBlock(msg *builderApiCapella.SubmitBlockRequest) error {
+func (r *LocalRelay) submitBlock(msg *builderApiDeneb.SubmitBlockRequest) error {
 	header, err := PayloadToPayloadHeader(msg.ExecutionPayload)
 	if err != nil {
 		log.Error("could not convert payload to header", "err", err)
@@ -233,133 +232,133 @@ func (r *LocalRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 }
 
 func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	slot, err := strconv.Atoi(vars["slot"])
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "incorrect slot")
-		return
-	}
-	parentHashHex := vars["parent_hash"]
-	pubkeyHex := PubkeyHex(strings.ToLower(vars["pubkey"]))
-
-	// Do not validate slot separately, it will create a race between slot update and proposer key
-	if nextSlotProposer, err := r.beaconClient.getProposerForNextSlot(uint64(slot)); err != nil || nextSlotProposer != pubkeyHex {
-		log.Error("getHeader requested for public key other than next slots proposer", "requested", pubkeyHex, "expected", nextSlotProposer)
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	// Only check if slot is within a couple of the expected one, otherwise will force validators resync
-	vd, err := r.GetValidatorForSlot(uint64(slot))
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "unknown validator")
-		return
-	}
-	if vd.Pubkey != pubkeyHex {
-		respondError(w, http.StatusBadRequest, "unknown validator")
-		return
-	}
-
-	r.bestDataLock.Lock()
-	bestHeader := r.bestHeader
-	profit := r.profit
-	r.bestDataLock.Unlock()
-
-	if bestHeader == nil || bestHeader.ParentHash.String() != parentHashHex {
-		respondError(w, http.StatusBadRequest, "unknown payload")
-		return
-	}
-
-	bid := builderApiCapella.BuilderBid{
-		Header: bestHeader,
-		Value:  profit,
-		Pubkey: r.relayPublicKey,
-	}
-	signature, err := ssz.SignMessage(&bid, r.builderSigningDomain, r.relaySecretKey)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-
-	response := &builderSpec.VersionedSignedBuilderBid{
-		Version: spec.DataVersionCapella,
-		Capella: &builderApiCapella.SignedBuilderBid{Message: &bid, Signature: signature},
-	}
+	// vars := mux.Vars(req)
+	// slot, err := strconv.Atoi(vars["slot"])
+	// if err != nil {
+	// 	respondError(w, http.StatusBadRequest, "incorrect slot")
+	// 	return
+	// }
+	// parentHashHex := vars["parent_hash"]
+	// pubkeyHex := PubkeyHex(strings.ToLower(vars["pubkey"]))
+	//
+	// // Do not validate slot separately, it will create a race between slot update and proposer key
+	// if nextSlotProposer, err := r.beaconClient.getProposerForNextSlot(uint64(slot)); err != nil || nextSlotProposer != pubkeyHex {
+	// 	log.Error("getHeader requested for public key other than next slots proposer", "requested", pubkeyHex, "expected", nextSlotProposer)
+	// 	w.WriteHeader(http.StatusNoContent)
+	// 	return
+	// }
+	//
+	// // Only check if slot is within a couple of the expected one, otherwise will force validators resync
+	// vd, err := r.GetValidatorForSlot(uint64(slot))
+	// if err != nil {
+	// 	respondError(w, http.StatusBadRequest, "unknown validator")
+	// 	return
+	// }
+	// if vd.Pubkey != pubkeyHex {
+	// 	respondError(w, http.StatusBadRequest, "unknown validator")
+	// 	return
+	// }
+	//
+	// r.bestDataLock.Lock()
+	// bestHeader := r.bestHeader
+	// profit := r.profit
+	// r.bestDataLock.Unlock()
+	//
+	// if bestHeader == nil || bestHeader.ParentHash.String() != parentHashHex {
+	// 	respondError(w, http.StatusBadRequest, "unknown payload")
+	// 	return
+	// }
+	//
+	// bid := builderApiCapella.BuilderBid{
+	// 	Header: bestHeader,
+	// 	Value:  profit,
+	// 	Pubkey: r.relayPublicKey,
+	// }
+	// signature, err := ssz.SignMessage(&bid, r.builderSigningDomain, r.relaySecretKey)
+	// if err != nil {
+	// 	respondError(w, http.StatusInternalServerError, "internal server error")
+	// 	return
+	// }
+	//
+	// response := &builderSpec.VersionedSignedBuilderBid{
+	// 	Version: spec.DataVersionCapella,
+	// 	Capella: &builderApiCapella.SignedBuilderBid{Message: &bid, Signature: signature},
+	// }
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		respondError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
+	// if err := json.NewEncoder(w).Encode(response); err != nil {
+	// 	respondError(w, http.StatusInternalServerError, "internal server error")
+	// 	return
+	// }
 }
 
 func (r *LocalRelay) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	payload := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		log.Error("failed to decode payload", "error", err)
-		respondError(w, http.StatusBadRequest, "invalid payload")
-		return
-	}
-
-	if len(payload.Signature) != 96 {
-		respondError(w, http.StatusBadRequest, "invalid signature")
-		return
-	}
-
-	nextSlotProposerPubkeyHex, err := r.beaconClient.getProposerForNextSlot(uint64(payload.Message.Slot))
-	if err != nil {
-		if r.enableBeaconChecks {
-			respondError(w, http.StatusBadRequest, "unknown validator")
-			return
-		}
-	}
-
-	nextSlotProposerPubkeyBytes, err := hexutil.Decode(string(nextSlotProposerPubkeyHex))
-	if err != nil {
-		if r.enableBeaconChecks {
-			respondError(w, http.StatusBadRequest, "unknown validator")
-			return
-		}
-	}
-
-	ok, err := ssz.VerifySignature(payload.Message, r.proposerSigningDomain, nextSlotProposerPubkeyBytes[:], payload.Signature[:])
-	if !ok || err != nil {
-		if r.enableBeaconChecks {
-			respondError(w, http.StatusBadRequest, "invalid signature")
-			return
-		}
-	}
-
-	r.bestDataLock.Lock()
-	bestHeader := r.bestHeader
-	bestPayload := r.bestPayload
-	r.bestDataLock.Unlock()
-
-	log.Info("Received blinded block", "payload", payload, "bestHeader", bestHeader)
-
-	if bestHeader == nil || bestPayload == nil {
-		respondError(w, http.StatusInternalServerError, "no payloads")
-		return
-	}
-
-	if !ExecutionPayloadHeaderEqual(bestHeader, payload.Message.Body.ExecutionPayloadHeader) {
-		respondError(w, http.StatusBadRequest, "unknown payload")
-		return
-	}
-
-	response := &builderApi.VersionedExecutionPayload{
-		Version: spec.DataVersionCapella,
-		Capella: bestPayload,
-	}
+	// payload := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
+	// if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	// 	log.Error("failed to decode payload", "error", err)
+	// 	respondError(w, http.StatusBadRequest, "invalid payload")
+	// 	return
+	// }
+	//
+	// if len(payload.Signature) != 96 {
+	// 	respondError(w, http.StatusBadRequest, "invalid signature")
+	// 	return
+	// }
+	//
+	// nextSlotProposerPubkeyHex, err := r.beaconClient.getProposerForNextSlot(uint64(payload.Message.Slot))
+	// if err != nil {
+	// 	if r.enableBeaconChecks {
+	// 		respondError(w, http.StatusBadRequest, "unknown validator")
+	// 		return
+	// 	}
+	// }
+	//
+	// nextSlotProposerPubkeyBytes, err := hexutil.Decode(string(nextSlotProposerPubkeyHex))
+	// if err != nil {
+	// 	if r.enableBeaconChecks {
+	// 		respondError(w, http.StatusBadRequest, "unknown validator")
+	// 		return
+	// 	}
+	// }
+	//
+	// ok, err := ssz.VerifySignature(payload.Message, r.proposerSigningDomain, nextSlotProposerPubkeyBytes[:], payload.Signature[:])
+	// if !ok || err != nil {
+	// 	if r.enableBeaconChecks {
+	// 		respondError(w, http.StatusBadRequest, "invalid signature")
+	// 		return
+	// 	}
+	// }
+	//
+	// r.bestDataLock.Lock()
+	// bestHeader := r.bestHeader
+	// bestPayload := r.bestPayload
+	// r.bestDataLock.Unlock()
+	//
+	// log.Info("Received blinded block", "payload", payload, "bestHeader", bestHeader)
+	//
+	// if bestHeader == nil || bestPayload == nil {
+	// 	respondError(w, http.StatusInternalServerError, "no payloads")
+	// 	return
+	// }
+	//
+	// if !ExecutionPayloadHeaderEqual(bestHeader, payload.Message.Body.ExecutionPayloadHeader) {
+	// 	respondError(w, http.StatusBadRequest, "unknown payload")
+	// 	return
+	// }
+	//
+	// response := &builderApi.VersionedExecutionPayload{
+	// 	Version: spec.DataVersionCapella,
+	// 	Capella: bestPayload,
+	// }
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		respondError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
+	// if err := json.NewEncoder(w).Encode(response); err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	respondError(w, http.StatusInternalServerError, "internal server error")
+	// 	return
+	// }
 }
 
 func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Request) {
@@ -398,8 +397,8 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 	}
 
 	response := &builderApi.VersionedExecutionPayload{
-		Version: spec.DataVersionCapella,
-		Capella: bestPayload,
+		Version: spec.DataVersionDeneb,
+		Deneb:   bestPayload,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -471,12 +470,12 @@ func (r *LocalRelay) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func ExecutionPayloadHeaderEqual(l, r *capella.ExecutionPayloadHeader) bool {
-	return l.ParentHash == r.ParentHash && l.FeeRecipient == r.FeeRecipient && l.StateRoot == r.StateRoot && l.ReceiptsRoot == r.ReceiptsRoot && l.LogsBloom == r.LogsBloom && l.PrevRandao == r.PrevRandao && l.BlockNumber == r.BlockNumber && l.GasLimit == r.GasLimit && l.GasUsed == r.GasUsed && l.Timestamp == r.Timestamp && l.BaseFeePerGas == r.BaseFeePerGas && bytes.Equal(l.ExtraData, r.ExtraData) && l.BlockHash == r.BlockHash && l.TransactionsRoot == r.TransactionsRoot && l.WithdrawalsRoot == r.WithdrawalsRoot
+func ExecutionPayloadHeaderEqual(l, r *deneb.ExecutionPayloadHeader) bool {
+	return l.ParentHash == r.ParentHash && l.FeeRecipient == r.FeeRecipient && l.StateRoot == r.StateRoot && l.ReceiptsRoot == r.ReceiptsRoot && l.LogsBloom == r.LogsBloom && l.PrevRandao == r.PrevRandao && l.BlockNumber == r.BlockNumber && l.GasLimit == r.GasLimit && l.GasUsed == r.GasUsed && l.Timestamp == r.Timestamp && l.BaseFeePerGas == r.BaseFeePerGas && bytes.Equal(l.ExtraData, r.ExtraData) && l.BlockHash == r.BlockHash && l.TransactionsRoot == r.TransactionsRoot && l.WithdrawalsRoot == r.WithdrawalsRoot && l.BlobGasUsed == r.BlobGasUsed && l.ExcessBlobGas == r.ExcessBlobGas
 }
 
 // PayloadToPayloadHeader converts an ExecutionPayload to ExecutionPayloadHeader
-func PayloadToPayloadHeader(p *capella.ExecutionPayload) (*capella.ExecutionPayloadHeader, error) {
+func PayloadToPayloadHeader(p *deneb.ExecutionPayload) (*deneb.ExecutionPayloadHeader, error) {
 	if p == nil {
 		return nil, errors.New("nil payload")
 	}
@@ -496,7 +495,7 @@ func PayloadToPayloadHeader(p *capella.ExecutionPayload) (*capella.ExecutionPayl
 		return nil, err
 	}
 
-	return &capella.ExecutionPayloadHeader{
+	return &deneb.ExecutionPayloadHeader{
 		ParentHash:       p.ParentHash,
 		FeeRecipient:     p.FeeRecipient,
 		StateRoot:        p.StateRoot,
@@ -512,5 +511,7 @@ func PayloadToPayloadHeader(p *capella.ExecutionPayload) (*capella.ExecutionPayl
 		BlockHash:        p.BlockHash,
 		TransactionsRoot: txroot,
 		WithdrawalsRoot:  wdr,
+		BlobGasUsed:      p.BlobGasUsed,
+		ExcessBlobGas:    p.ExcessBlobGas,
 	}, nil
 }
