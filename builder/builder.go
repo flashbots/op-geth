@@ -515,6 +515,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 func executableDataToExecutionPayload(data *engine.ExecutionPayloadEnvelope, version spec.DataVersion) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	// if version in phase0, altair, unsupported version
+	log.Info("begin", "version", version)
 	if version == spec.DataVersionUnknown || version == spec.DataVersionPhase0 || version == spec.DataVersionAltair {
 		return nil, fmt.Errorf("unsupported data version %d", version)
 	}
@@ -563,6 +564,7 @@ func executableDataToExecutionPayload(data *engine.ExecutionPayloadEnvelope, ver
 		return getDenebPayload(payload, uint256BaseFeePerGas, transactionData, withdrawalData, blobsBundle), nil
 	}
 
+	log.Info("end", "version", version)
 	return nil, fmt.Errorf("unsupported data version %d", version)
 }
 
