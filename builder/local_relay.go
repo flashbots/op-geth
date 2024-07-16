@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
@@ -396,7 +395,7 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	response := &builderApi.VersionedExecutionPayload{
+	response := &VersionedExecutionPayload{
 		Version: spec.DataVersionDeneb,
 		Deneb:   bestPayload,
 	}

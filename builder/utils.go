@@ -9,6 +9,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 )
 
 var errHTTPErrorResponse = errors.New("HTTP error response")
@@ -116,4 +121,75 @@ func SendHTTPRequest(ctx context.Context, client http.Client, method, url string
 	}
 
 	return resp.StatusCode, nil
+}
+
+type VersionedExecutionPayload struct {
+	Version   spec.DataVersion
+	Bellatrix *bellatrix.ExecutionPayload
+	Capella   *capella.ExecutionPayload
+	Deneb     *deneb.ExecutionPayload
+}
+
+type versionJSON struct {
+	Version spec.DataVersion `json:"version"`
+}
+
+type bellatrixVersionedExecutionPayloadJSON struct {
+	Data *bellatrix.ExecutionPayload `json:"data"`
+}
+
+type capellaVersionedExecutionPayloadJSON struct {
+	Data *capella.ExecutionPayload `json:"data"`
+}
+
+type denebVersionedExecutionPayloadJSON struct {
+	Data *deneb.ExecutionPayload `json:"data"`
+}
+
+func (v *VersionedExecutionPayload) MarshalJSON() ([]byte, error) {
+	version := &versionJSON{
+		Version: v.Version,
+	}
+	switch v.Version {
+	case spec.DataVersionBellatrix:
+		if v.Bellatrix == nil {
+			return nil, errors.New("no bellatrix data")
+		}
+		data := &bellatrixVersionedExecutionPayloadJSON{
+			Data: v.Bellatrix,
+		}
+		payload := struct {
+			*versionJSON
+			*bellatrixVersionedExecutionPayloadJSON
+		}{version, data}
+
+		return json.Marshal(payload)
+	case spec.DataVersionCapella:
+		if v.Capella == nil {
+			return nil, errors.New("no capella data")
+		}
+		data := &capellaVersionedExecutionPayloadJSON{
+			Data: v.Capella,
+		}
+		payload := struct {
+			*versionJSON
+			*capellaVersionedExecutionPayloadJSON
+		}{version, data}
+
+		return json.Marshal(payload)
+	case spec.DataVersionDeneb:
+		if v.Deneb == nil {
+			return nil, errors.New("no deneb data")
+		}
+		data := &denebVersionedExecutionPayloadJSON{
+			Data: v.Deneb,
+		}
+		payload := struct {
+			*versionJSON
+			*denebVersionedExecutionPayloadJSON
+		}{version, data}
+		return json.Marshal(payload)
+	default:
+		return nil, fmt.Errorf("unsupported data version %v", v.Version)
+	}
 }
