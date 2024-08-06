@@ -1625,6 +1625,7 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 
 	misc.EnsureCreate2Deployer(w.chainConfig, work.header.Time, work.state)
 
+	log.Info("Generate work:", "genParams", params)
 	log.Info("Number of txs in attrs", "numTxs", len(params.txs))
 
 	for _, tx := range params.txs {
