@@ -1277,7 +1277,7 @@ func doPrepareHeader(genParams *generateParams, chain *core.BlockChain, config *
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
-	if len(extra) != 0 {
+	if len(extra) != 0 && chainConfig.Optimism == nil {
 		header.Extra = extra
 	}
 
