@@ -119,6 +119,13 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, args.Id())
 
+	if args.NoTxPool {
+		payload.full = empty.block
+		payload.fullFees = empty.fees
+		payload.cond.Broadcast() // unblocks resolve
+		return payload, nil
+	}
+
 	if len(w.workers) == 0 {
 		return payload, nil
 	}
