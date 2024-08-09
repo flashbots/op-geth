@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	builderApi "github.com/attestantio/go-builder-client/api"
 	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
@@ -395,9 +396,12 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	response := &VersionedExecutionPayload{
+	response := &builderApi.VersionedSubmitBlindedBlockResponse{
 		Version: spec.DataVersionDeneb,
-		Deneb:   bestPayload,
+		Deneb:   &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
+			ExecutionPayload: bestPayload,
+			BlobsBundle:      &builderApiDeneb.BlobsBundle{},
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
