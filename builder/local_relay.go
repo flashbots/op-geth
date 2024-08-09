@@ -8,15 +8,10 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
-	"time"
 
-	builderApi "github.com/attestantio/go-builder-client/api"
-	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
-	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	"github.com/attestantio/go-eth2-client/spec"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -25,10 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/bls"
-	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/gorilla/mux"
-	"github.com/holiman/uint256"
 )
 
 // TODO (deneb): remove local relay
@@ -59,10 +52,9 @@ type LocalRelay struct {
 
 	enableBeaconChecks bool
 
-	bestDataLock sync.Mutex
-	bestHeader   *deneb.ExecutionPayloadHeader
-	bestPayload  *deneb.ExecutionPayload
-	profit       *uint256.Int
+	bestDataLock   sync.Mutex
+	bestHeader     *deneb.ExecutionPayloadHeader
+	bestSubmission *builderSpec.VersionedSubmitBlockRequest
 
 	indexTemplate *template.Template
 	fd            ForkData
@@ -113,8 +105,23 @@ func (r *LocalRelay) Stop() {
 }
 
 func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _ ValidatorData) error {
+	if msg.Version != consensusspec.DataVersionDeneb {
+		return fmt.Errorf("unsupported data version %d", msg.Version)
+	}
+
 	log.Info("submitting block to local relay", "msg", msg, "version", msg.Version)
-	return r.submitBlock(msg.Deneb)
+	header, err := PayloadToPayloadHeader(msg.Deneb.ExecutionPayload)
+	if err != nil {
+		log.Error("could not convert payload to header", "err", err)
+		return err
+	}
+
+	r.bestDataLock.Lock()
+	r.bestSubmission = msg
+	r.bestHeader = header
+	r.bestDataLock.Unlock()
+
+	return nil
 }
 
 func (r *LocalRelay) Config() RelayConfig {
@@ -122,243 +129,24 @@ func (r *LocalRelay) Config() RelayConfig {
 	return RelayConfig{}
 }
 
-func (r *LocalRelay) submitBlock(msg *builderApiDeneb.SubmitBlockRequest) error {
-	header, err := PayloadToPayloadHeader(msg.ExecutionPayload)
-	if err != nil {
-		log.Error("could not convert payload to header", "err", err)
-		return err
-	}
-
-	r.bestDataLock.Lock()
-	r.bestHeader = header
-	r.bestPayload = msg.ExecutionPayload
-	r.profit = msg.Message.Value
-	r.bestDataLock.Unlock()
-
-	return nil
-}
-
 func (r *LocalRelay) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
-	payload := []builderApiV1.SignedValidatorRegistration{}
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		log.Error("could not decode payload", "err", err)
-		respondError(w, http.StatusBadRequest, "invalid payload")
-		return
-	}
-
-	for _, registerRequest := range payload {
-		if len(registerRequest.Message.Pubkey) != 48 {
-			respondError(w, http.StatusBadRequest, "invalid pubkey")
-			return
-		}
-
-		if len(registerRequest.Signature) != 96 {
-			respondError(w, http.StatusBadRequest, "invalid signature")
-			return
-		}
-
-		ok, err := ssz.VerifySignature(registerRequest.Message, r.builderSigningDomain, registerRequest.Message.Pubkey[:], registerRequest.Signature[:])
-		if !ok || err != nil {
-			log.Error("error verifying signature", "err", err)
-			respondError(w, http.StatusBadRequest, "invalid signature")
-			return
-		}
-
-		// Do not check timestamp before signature, as it would leak validator data
-		if registerRequest.Message.Timestamp.Unix() > time.Now().Add(10*time.Second).Unix() {
-			log.Error("invalid timestamp", "timestamp", registerRequest.Message.Timestamp)
-			respondError(w, http.StatusBadRequest, "invalid payload")
-			return
-		}
-	}
-
-	for _, registerRequest := range payload {
-		pubkeyHex := PubkeyHex(registerRequest.Message.Pubkey.String())
-		if !r.beaconClient.isValidator(pubkeyHex) {
-			respondError(w, http.StatusBadRequest, "not a validator")
-			return
-		}
-	}
-
-	r.validatorsLock.Lock()
-	defer r.validatorsLock.Unlock()
-
-	for _, registerRequest := range payload {
-		pubkeyHex := PubkeyHex(registerRequest.Message.Pubkey.String())
-		if previousValidatorData, ok := r.validators[pubkeyHex]; ok {
-			if uint64(registerRequest.Message.Timestamp.Unix()) < previousValidatorData.Timestamp {
-				respondError(w, http.StatusBadRequest, "invalid timestamp")
-				return
-			}
-
-			if uint64(registerRequest.Message.Timestamp.Unix()) == previousValidatorData.Timestamp && (registerRequest.Message.FeeRecipient != previousValidatorData.FeeRecipient || registerRequest.Message.GasLimit != previousValidatorData.GasLimit) {
-				respondError(w, http.StatusBadRequest, "invalid timestamp")
-				return
-			}
-		}
-	}
-
-	for _, registerRequest := range payload {
-		pubkeyHex := PubkeyHex(strings.ToLower(registerRequest.Message.Pubkey.String()))
-		r.validators[pubkeyHex] = FullValidatorData{
-			ValidatorData: ValidatorData{
-				Pubkey:       pubkeyHex,
-				FeeRecipient: registerRequest.Message.FeeRecipient,
-				GasLimit:     registerRequest.Message.GasLimit,
-			},
-			Timestamp: uint64(registerRequest.Message.Timestamp.Unix()),
-		}
-
-		log.Info("registered validator", "pubkey", pubkeyHex, "data", r.validators[pubkeyHex])
-	}
-
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 func (r *LocalRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error) {
-	pubkeyHex, err := r.beaconClient.getProposerForNextSlot(nextSlot)
-	if err != nil {
-		return ValidatorData{}, err
-	}
-
-	r.validatorsLock.RLock()
-	if vd, ok := r.validators[pubkeyHex]; ok {
-		r.validatorsLock.RUnlock()
-		return vd.ValidatorData, nil
-	}
-	r.validatorsLock.RUnlock()
-	log.Info("no local entry for validator", "validator", pubkeyHex)
+	// Not implemented.
 	return ValidatorData{}, errors.New("missing validator")
 }
 
 func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {
-	// vars := mux.Vars(req)
-	// slot, err := strconv.Atoi(vars["slot"])
-	// if err != nil {
-	// 	respondError(w, http.StatusBadRequest, "incorrect slot")
-	// 	return
-	// }
-	// parentHashHex := vars["parent_hash"]
-	// pubkeyHex := PubkeyHex(strings.ToLower(vars["pubkey"]))
-	//
-	// // Do not validate slot separately, it will create a race between slot update and proposer key
-	// if nextSlotProposer, err := r.beaconClient.getProposerForNextSlot(uint64(slot)); err != nil || nextSlotProposer != pubkeyHex {
-	// 	log.Error("getHeader requested for public key other than next slots proposer", "requested", pubkeyHex, "expected", nextSlotProposer)
-	// 	w.WriteHeader(http.StatusNoContent)
-	// 	return
-	// }
-	//
-	// // Only check if slot is within a couple of the expected one, otherwise will force validators resync
-	// vd, err := r.GetValidatorForSlot(uint64(slot))
-	// if err != nil {
-	// 	respondError(w, http.StatusBadRequest, "unknown validator")
-	// 	return
-	// }
-	// if vd.Pubkey != pubkeyHex {
-	// 	respondError(w, http.StatusBadRequest, "unknown validator")
-	// 	return
-	// }
-	//
-	// r.bestDataLock.Lock()
-	// bestHeader := r.bestHeader
-	// profit := r.profit
-	// r.bestDataLock.Unlock()
-	//
-	// if bestHeader == nil || bestHeader.ParentHash.String() != parentHashHex {
-	// 	respondError(w, http.StatusBadRequest, "unknown payload")
-	// 	return
-	// }
-	//
-	// bid := builderApiCapella.BuilderBid{
-	// 	Header: bestHeader,
-	// 	Value:  profit,
-	// 	Pubkey: r.relayPublicKey,
-	// }
-	// signature, err := ssz.SignMessage(&bid, r.builderSigningDomain, r.relaySecretKey)
-	// if err != nil {
-	// 	respondError(w, http.StatusInternalServerError, "internal server error")
-	// 	return
-	// }
-	//
-	// response := &builderSpec.VersionedSignedBuilderBid{
-	// 	Version: spec.DataVersionCapella,
-	// 	Capella: &builderApiCapella.SignedBuilderBid{Message: &bid, Signature: signature},
-	// }
-
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	// if err := json.NewEncoder(w).Encode(response); err != nil {
-	// 	respondError(w, http.StatusInternalServerError, "internal server error")
-	// 	return
-	// }
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 func (r *LocalRelay) handleGetPayload(w http.ResponseWriter, req *http.Request) {
-	// payload := new(eth2ApiV1Capella.SignedBlindedBeaconBlock)
-	// if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-	// 	log.Error("failed to decode payload", "error", err)
-	// 	respondError(w, http.StatusBadRequest, "invalid payload")
-	// 	return
-	// }
-	//
-	// if len(payload.Signature) != 96 {
-	// 	respondError(w, http.StatusBadRequest, "invalid signature")
-	// 	return
-	// }
-	//
-	// nextSlotProposerPubkeyHex, err := r.beaconClient.getProposerForNextSlot(uint64(payload.Message.Slot))
-	// if err != nil {
-	// 	if r.enableBeaconChecks {
-	// 		respondError(w, http.StatusBadRequest, "unknown validator")
-	// 		return
-	// 	}
-	// }
-	//
-	// nextSlotProposerPubkeyBytes, err := hexutil.Decode(string(nextSlotProposerPubkeyHex))
-	// if err != nil {
-	// 	if r.enableBeaconChecks {
-	// 		respondError(w, http.StatusBadRequest, "unknown validator")
-	// 		return
-	// 	}
-	// }
-	//
-	// ok, err := ssz.VerifySignature(payload.Message, r.proposerSigningDomain, nextSlotProposerPubkeyBytes[:], payload.Signature[:])
-	// if !ok || err != nil {
-	// 	if r.enableBeaconChecks {
-	// 		respondError(w, http.StatusBadRequest, "invalid signature")
-	// 		return
-	// 	}
-	// }
-	//
-	// r.bestDataLock.Lock()
-	// bestHeader := r.bestHeader
-	// bestPayload := r.bestPayload
-	// r.bestDataLock.Unlock()
-	//
-	// log.Info("Received blinded block", "payload", payload, "bestHeader", bestHeader)
-	//
-	// if bestHeader == nil || bestPayload == nil {
-	// 	respondError(w, http.StatusInternalServerError, "no payloads")
-	// 	return
-	// }
-	//
-	// if !ExecutionPayloadHeaderEqual(bestHeader, payload.Message.Body.ExecutionPayloadHeader) {
-	// 	respondError(w, http.StatusBadRequest, "unknown payload")
-	// 	return
-	// }
-	//
-	// response := &builderApi.VersionedExecutionPayload{
-	// 	Version: spec.DataVersionCapella,
-	// 	Capella: bestPayload,
-	// }
-
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	// if err := json.NewEncoder(w).Encode(response); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	respondError(w, http.StatusInternalServerError, "internal server error")
-	// 	return
-	// }
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Request) {
@@ -373,7 +161,8 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 
 	r.bestDataLock.Lock()
 	bestHeader := r.bestHeader
-	bestPayload := r.bestPayload
+	bestSubmission := r.bestSubmission
+	bestPayload := bestSubmission.Deneb.ExecutionPayload
 	r.bestDataLock.Unlock()
 
 	log.Info("Received unblinded(trusted) block request", "bestHeader", bestHeader, "bestPayload", bestPayload)
@@ -396,17 +185,9 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	response := &builderApi.VersionedSubmitBlindedBlockResponse{
-		Version: spec.DataVersionDeneb,
-		Deneb:   &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
-			ExecutionPayload: bestPayload,
-			BlobsBundle:      &builderApiDeneb.BlobsBundle{},
-		},
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	if err := json.NewEncoder(w).Encode(bestSubmission); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Error("could not encode response", "err", err)
 		respondError(w, http.StatusInternalServerError, "internal server error")
@@ -415,45 +196,8 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 }
 
 func (r *LocalRelay) handleIndex(w http.ResponseWriter, req *http.Request) {
-	if r.indexTemplate == nil {
-		http.Error(w, "not available", http.StatusInternalServerError)
-	}
-
-	r.validatorsLock.RLock()
-	noValidators := len(r.validators)
-	r.validatorsLock.RUnlock()
-	validatorsStats := fmt.Sprint(noValidators) + " validators registered"
-
-	r.bestDataLock.Lock()
-	header := r.bestHeader
-	payload := r.bestPayload
-	r.bestDataLock.Lock()
-
-	headerData, err := json.MarshalIndent(header, "", "  ")
-	if err != nil {
-		headerData = []byte{}
-	}
-
-	payloadData, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		payloadData = []byte{}
-	}
-
-	statusData := struct {
-		Pubkey                string
-		ValidatorsStats       string
-		GenesisForkVersion    string
-		BellatrixForkVersion  string
-		GenesisValidatorsRoot string
-		BuilderSigningDomain  string
-		ProposerSigningDomain string
-		Header                string
-		Blocks                string
-	}{hexutil.Encode(r.serializedRelayPubkey), validatorsStats, r.fd.GenesisForkVersion, r.fd.BellatrixForkVersion, r.fd.GenesisValidatorsRoot, hexutil.Encode(r.builderSigningDomain[:]), hexutil.Encode(r.proposerSigningDomain[:]), string(headerData), string(payloadData)}
-
-	if err := r.indexTemplate.Execute(w, statusData); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 type httpErrorResp struct {
