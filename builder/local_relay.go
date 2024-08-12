@@ -162,13 +162,12 @@ func (r *LocalRelay) handleGetPayloadTrusted(w http.ResponseWriter, req *http.Re
 	r.bestDataLock.Lock()
 	bestHeader := r.bestHeader
 	bestSubmission := r.bestSubmission
-	bestPayload := bestSubmission.Deneb.ExecutionPayload
 	r.bestDataLock.Unlock()
 
-	log.Info("Received unblinded(trusted) block request", "bestHeader", bestHeader, "bestPayload", bestPayload)
+	log.Info("Received unblinded(trusted) block request", "bestHeader", bestHeader, "bestSubmission", bestSubmission)
 
-	if bestHeader == nil || bestPayload == nil {
-		log.Error("no payloads")
+	if bestHeader == nil || bestSubmission == nil {
+		log.Error("no builder submissions")
 		respondError(w, http.StatusInternalServerError, "no payloads")
 		return
 	}

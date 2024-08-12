@@ -102,6 +102,7 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		withdrawals: args.Withdrawals,
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
+		txs:         args.Transactions,
 	}
 	for _, worker := range w.workers {
 		empty = worker.getSealingBlock(emptyParams)

@@ -655,6 +655,17 @@ func getDenebPayload(
 	withdrawals []*capella.Withdrawal,
 	blobsBundle *engine.BlobsBundleV1,
 ) *builderApi.VersionedSubmitBlindedBlockResponse {
+
+	blobGasUsed := uint64(0)
+	if payload.BlobGasUsed != nil {
+		blobGasUsed = *payload.BlobGasUsed
+	}
+
+	excessBlobGas := uint64(0)
+	if payload.ExcessBlobGas != nil {
+		excessBlobGas = *payload.ExcessBlobGas
+	}
+
 	return &builderApi.VersionedSubmitBlindedBlockResponse{
 		Version: spec.DataVersionDeneb,
 		Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
@@ -674,8 +685,8 @@ func getDenebPayload(
 				BlockHash:     [32]byte(payload.BlockHash),
 				Transactions:  transactions,
 				Withdrawals:   withdrawals,
-				BlobGasUsed:   *payload.BlobGasUsed,
-				ExcessBlobGas: *payload.ExcessBlobGas,
+				BlobGasUsed:   blobGasUsed,
+				ExcessBlobGas: excessBlobGas,
 			},
 			BlobsBundle: getBlobsBundle(blobsBundle),
 		},
