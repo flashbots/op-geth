@@ -275,29 +275,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	log.Info("new worker", "builderCoinbase", builderCoinbase.String())
 	exitCh := make(chan struct{})
 	taskCh := make(chan *task)
-	// mev-geth deprecated
-	if flashbots.algoType == ALGO_MEV_GETH {
-		if flashbots.isFlashbots {
-			// publish to the flashbots queue
-			taskCh = flashbots.queue
-		} else {
-			// read from the flashbots queue
-			go func() {
-				for {
-					select {
-					case flashbotsTask := <-flashbots.queue:
-						select {
-						case taskCh <- flashbotsTask:
-						case <-exitCh:
-							return
-						}
-					case <-exitCh:
-						return
-					}
-				}
-			}()
-		}
-	}
 
 	blockList := make(map[common.Address]struct{})
 	for _, address := range config.Blocklist {
