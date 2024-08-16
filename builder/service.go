@@ -158,12 +158,9 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 	var beaconClient IBeaconClient
 	if len(cfg.BeaconEndpoints) == 0 {
 		beaconClient = &NilBeaconClient{}
-	} else if len(cfg.BeaconEndpoints) == 1 {
-		beaconClient = NewOpBeaconClient(cfg.BeaconEndpoints[0])
 	} else {
-		beaconClient = NewMultiBeaconClient(cfg.BeaconEndpoints, cfg.SlotsInEpoch, cfg.SecondsInSlot)
+		beaconClient = NewOpBeaconClient(cfg.BeaconEndpoints[0])
 	}
-
 	var localRelay *LocalRelay
 	if cfg.EnableLocalRelay {
 		envRelaySkBytes, err := hexutil.Decode(cfg.RelaySecretKey)
