@@ -244,7 +244,15 @@ func (b *Builder) Stop() error {
 func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	log.Info("OnSealedBlock", "slot", opts.PayloadAttributes.Slot, "parent", opts.PayloadAttributes.HeadHash.String(), "hash", opts.Block.Hash().String())
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
-	dataVersion := spec.DataVersionDeneb
+
+	var dataVersion spec.DataVersion
+	if b.eth.Config().IsEcotone(opts.Block.Time()) {
+		dataVersion = spec.DataVersionDeneb
+	} else if b.eth.Config().IsCanyon(opts.Block.Time()) {
+		dataVersion = spec.DataVersionCapella
+	} else {
+		dataVersion = spec.DataVersionBellatrix
+	}
 
 	value, overflow := uint256.FromBig(opts.BlockValue)
 	if overflow {
@@ -518,7 +526,6 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 func executableDataToExecutionPayload(data *engine.ExecutionPayloadEnvelope, version spec.DataVersion) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {
 	// if version in phase0, altair, unsupported version
-	log.Info("begin", "version", version)
 	if version == spec.DataVersionUnknown || version == spec.DataVersionPhase0 || version == spec.DataVersionAltair {
 		return nil, fmt.Errorf("unsupported data version %d", version)
 	}
@@ -567,7 +574,6 @@ func executableDataToExecutionPayload(data *engine.ExecutionPayloadEnvelope, ver
 		return getDenebPayload(payload, uint256BaseFeePerGas, transactionData, withdrawalData, blobsBundle), nil
 	}
 
-	log.Info("end", "version", version)
 	return nil, fmt.Errorf("unsupported data version %d", version)
 }
 
@@ -658,17 +664,6 @@ func getDenebPayload(
 	withdrawals []*capella.Withdrawal,
 	blobsBundle *engine.BlobsBundleV1,
 ) *builderApi.VersionedSubmitBlindedBlockResponse {
-
-	blobGasUsed := uint64(0)
-	if payload.BlobGasUsed != nil {
-		blobGasUsed = *payload.BlobGasUsed
-	}
-
-	excessBlobGas := uint64(0)
-	if payload.ExcessBlobGas != nil {
-		excessBlobGas = *payload.ExcessBlobGas
-	}
-
 	return &builderApi.VersionedSubmitBlindedBlockResponse{
 		Version: spec.DataVersionDeneb,
 		Deneb: &builderApiDeneb.ExecutionPayloadAndBlobsBundle{
@@ -688,8 +683,8 @@ func getDenebPayload(
 				BlockHash:     [32]byte(payload.BlockHash),
 				Transactions:  transactions,
 				Withdrawals:   withdrawals,
-				BlobGasUsed:   blobGasUsed,
-				ExcessBlobGas: excessBlobGas,
+				BlobGasUsed:   *payload.BlobGasUsed,
+				ExcessBlobGas: *payload.ExcessBlobGas,
 			},
 			BlobsBundle: getBlobsBundle(blobsBundle),
 		},
