@@ -303,6 +303,7 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 		validator:                     validator,
 		beaconClient:                  beaconClient,
 		limiter:                       limiter,
+		blockTime:                     cfg.BlockTime,
 	}
 
 	builderBackend, err := NewBuilder(builderArgs)

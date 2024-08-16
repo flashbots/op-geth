@@ -41,8 +41,8 @@ const (
 	RateLimitBurstDefault        = 10
 	BlockResubmitIntervalDefault = 500 * time.Millisecond
 
-	SubmissionOffsetFromEndOfSlotSecondsDefault = 100 * time.Millisecond
-	BlockTime                                   = 2000 * time.Millisecond // TODO: Configure by flag.
+	SubmissionOffsetFromEndOfSlotSecondsDefault = 1500 * time.Millisecond
+	BlockTimeDefault                            = 2000 * time.Millisecond // TODO: Configure by flag.
 )
 
 type PubkeyHex string
@@ -80,6 +80,7 @@ type Builder struct {
 	builderPublicKey            phase0.BLSPubKey
 	builderSigningDomain        phase0.Domain
 	builderResubmitInterval     time.Duration
+	builderBlockTime            time.Duration
 	discardRevertibleTxOnErr    bool
 
 	limiter                       *rate.Limiter
@@ -101,6 +102,7 @@ type BuilderArgs struct {
 	relay                         IRelay
 	builderSigningDomain          phase0.Domain
 	builderBlockResubmitInterval  time.Duration
+	blockTime                     time.Duration
 	discardRevertibleTxOnErr      bool
 	eth                           IEthereumService
 	dryRun                        bool
@@ -174,6 +176,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		builderPublicKey:              pk,
 		builderSigningDomain:          args.builderSigningDomain,
 		builderResubmitInterval:       args.builderBlockResubmitInterval,
+		builderBlockTime:              args.blockTime,
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
@@ -389,7 +392,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		b.slotCtxCancel()
 	}
 
-	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), BlockTime*time.Second)
+	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), b.builderBlockTime)
 	b.slotAttrs = *attrs
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
@@ -410,7 +413,7 @@ type blockQueueEntry struct {
 }
 
 func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.BLSPubKey, vd ValidatorData, attrs *types.BuilderPayloadAttributes) {
-	ctx, cancel := context.WithTimeout(slotCtx, BlockTime*time.Second)
+	ctx, cancel := context.WithTimeout(slotCtx, b.builderBlockTime)
 	defer cancel()
 
 	// Submission queue for the given payload attributes

@@ -787,6 +787,14 @@ var (
 		Category: flags.BuilderCategory,
 	}
 
+	BuilderBlockTime = &cli.DurationFlag{
+		Name:     "builder.block_time",
+		Usage:    "Determines the block time of the network.",
+		EnvVars:  []string{"FLASHBOTS_BUILDER_BLOCK_TIME"},
+		Value:    builder.BlockTimeDefault,
+		Category: flags.BuilderCategory,
+	}
+
 	BuilderBlockResubmitInterval = &cli.StringFlag{
 		Name:     "builder.block_resubmit_interval",
 		Usage:    "Determines the interval at which builder will resubmit block submissions",
@@ -1713,6 +1721,7 @@ func SetBuilderConfig(ctx *cli.Context, cfg *builder.Config) {
 	cfg.BuilderRateLimitResubmitInterval = ctx.String(BuilderBlockResubmitInterval.Name)
 
 	cfg.BlockProcessorURL = ctx.String(BuilderBlockProcessorURL.Name)
+	cfg.BlockTime = ctx.Duration(BuilderBlockTime.Name)
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
