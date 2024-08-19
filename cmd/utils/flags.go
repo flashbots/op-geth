@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -1895,11 +1896,16 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerGasLimitFlag.Name) {
 		cfg.GasCeil = ctx.Uint64(MinerGasLimitFlag.Name)
 	}
-	if ctx.IsSet(MinerEffectiveGasLimitFlag.Name) {
-		cfg.EffectiveGasCeil = ctx.Uint64(MinerEffectiveGasLimitFlag.Name)
-	}
 	if ctx.IsSet(MinerGasPriceFlag.Name) {
 		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
+	}
+	// NOTE: BuilderAlgoTypeFlag takes precedence and will overwrite value set by MinerAlgoTypeFlag.
+	if ctx.IsSet(BuilderAlgoTypeFlag.Name) {
+		algoType, err := miner.AlgoTypeFlagToEnum(ctx.String(BuilderAlgoTypeFlag.Name))
+		if err != nil {
+			Fatalf("Invalid algo in --builder.algotype: %s", ctx.String(BuilderAlgoTypeFlag.Name))
+		}
+		cfg.AlgoType = algoType
 	}
 	if ctx.IsSet(MinerRecommitIntervalFlag.Name) {
 		cfg.Recommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
@@ -1907,9 +1913,35 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
 		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
 	}
-	if ctx.IsSet(RollupComputePendingBlock.Name) {
-		cfg.RollupComputePendingBlock = ctx.Bool(RollupComputePendingBlock.Name)
+
+	cfg.MaxMergedBundles = ctx.Int(MinerMaxMergedBundlesFlag.Name)
+
+	// NOTE: This flag is deprecated and will be removed in the future in favor of BuilderBlockValidationBlacklistSourceFilePath
+	if ctx.IsSet(MinerBlocklistFileFlag.Name) {
+		bytes, err := os.ReadFile(ctx.String(MinerBlocklistFileFlag.Name))
+		if err != nil {
+			Fatalf("Failed to read blocklist file: %s", err)
+		}
+
+		if err := json.Unmarshal(bytes, &cfg.Blocklist); err != nil {
+			Fatalf("Failed to parse blocklist: %s", err)
+		}
 	}
+
+	// NOTE: This flag takes precedence and will overwrite value set by MinerBlocklistFileFlag
+	if ctx.IsSet(BuilderBlockValidationBlacklistSourceFilePath.Name) {
+		bytes, err := os.ReadFile(ctx.String(BuilderBlockValidationBlacklistSourceFilePath.Name))
+		if err != nil {
+			Fatalf("Failed to read blocklist file: %s", err)
+		}
+
+		if err := json.Unmarshal(bytes, &cfg.Blocklist); err != nil {
+			Fatalf("Failed to parse blocklist: %s", err)
+		}
+	}
+
+	cfg.DiscardRevertibleTxOnErr = ctx.Bool(BuilderDiscardRevertibleTxOnErr.Name)
+	cfg.PriceCutoffPercent = ctx.Int(BuilderPriceCutoffPercentFlag.Name)
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
