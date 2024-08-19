@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
@@ -99,10 +98,6 @@ func (r *LocalRelay) Stop() {
 }
 
 func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _ ValidatorData) error {
-	if msg.Version != consensusspec.DataVersionDeneb {
-		return fmt.Errorf("unsupported data version %d", msg.Version)
-	}
-
 	log.Info("submitting block to local relay", "msg", msg, "version", msg.Version)
 
 	r.bestSubmissionLock.Lock()

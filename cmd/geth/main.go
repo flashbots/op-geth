@@ -192,6 +192,7 @@ var (
 		utils.BuilderDiscardRevertibleTxOnErr,
 		utils.BuilderEnableCancellations,
 		utils.BuilderBlockProcessorURL,
+		utils.BuilderBlockTime,
 	}
 
 	rpcFlags = []cli.Flag{
