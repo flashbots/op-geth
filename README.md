@@ -34,9 +34,8 @@ sequenceDiagram
     participant Local Engine
 
     Sequencer->>Builder Op-Node: Send latest head update (p2p channel)
-    Builder Op-Node->>Event Stream: Publish latest attributes
-    Builder Op-Node->>Builder: Trigger build process (Attributes available)
-    Builder->>Local Engine: Start building block
+    Builder Op-Node->>Builder: Publish attributes to the event stream
+    Builder->>Builder: Start building blocks
     Sequencer->>Builder: GetPayload API request
     Builder->>Sequencer: Return built payload
     Sequencer->>Local Engine: Insert payload
