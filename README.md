@@ -1,8 +1,6 @@
 # Flashbots Op-Geth Builder
 
-This experimental project implements the block builder for Optimism, based on [op-geth](https://github.com/ethereum-optimism/op-geth).
-
----
+This is an experimental project that implements the block builder for Optimism, based on [op-geth](https://github.com/ethereum-optimism/op-geth).
 
 ## How it works
 
@@ -155,8 +153,6 @@ The sequencer exposes the builder API related prometheus metrics to the same `/m
 If you find a security vulnerability in this project or any other initiative
 related to proposer/builder separation in Ethereum, please let us know sending
 an email to security@flashbots.net.
-
----
 
 # License
 
