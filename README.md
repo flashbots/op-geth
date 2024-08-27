@@ -42,7 +42,7 @@ sequenceDiagram
     SEQ->>BOP: Send latest head update (p2p channel)
     BOP->>BUILDER: Publish attributes to the event stream
     BUILDER->>BUILDER: Start building blocks
-    SEQ->>BUILDER: GetPayload API request
+    SEQ->>BUILDER: GetPayload Builder API request
     BUILDER->>SEQ: VersionedSubmitBlockRequest
     SEQ->>ENGINE: Insert payload
 ```
@@ -53,6 +53,7 @@ Key Components:
 * Builder Op-Node: Op-node connected to the network to get the latest head update.
 * Builder: Flashbots block builder for Optimism.
 
+Process:
 1. Sequencer publishes the latest head update in p2p channel
 2. Builder Op-Node receives the head update and publishes the attributes to the event stream.
 3. Builder listens to the event stream and triggers the build process when the attributes are available.
