@@ -34,16 +34,21 @@ A simplified sequence diagram of the process is as follows:
 
 ```mermaid
 sequenceDiagram
+    box Sequencer
     participant SEQ as Sequencer
     participant ENGINE as Local Engine
+    end
+    box Builder
     participant BOP as Builder Op-Node
     participant BUILDER as Builder Op-Geth
+    end
 
     SEQ->>BOP: Send latest head update (p2p channel)
     BOP->>BUILDER: Publish attributes to the event stream
+    activate BUILDER
     BUILDER->>BUILDER: Start building blocks
     SEQ->>BUILDER: GetPayload Builder API request
-    BUILDER->>SEQ: VersionedSubmitBlockRequest
+    BUILDER-->>SEQ: VersionedSubmitBlockRequest
     SEQ->>ENGINE: Insert payload
 ```
 
