@@ -27,15 +27,10 @@ A simplified sequence diagram of the process is as follows:
 
 ```mermaid
 sequenceDiagram
-    rect rgba(0, 0, 255, 0.1)
     participant SEQ as Sequencer
     participant ENGINE as Local Engine
-    end
-
-    rect rgba(0, 255, 0, 0.1)
     participant BOP as Builder Op-Node
     participant BUILDER as Builder Op-Geth
-    end
 
     SEQ->>BOP: Send latest head update (p2p channel)
     BOP->>BUILDER: Publish attributes to the event stream
