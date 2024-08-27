@@ -26,19 +26,23 @@ Similar to the original beacon chain proposer-builder-separation, op-node publis
 A simplified sequence diagram of the process is as follows:
 
 ```mermaid
-
 sequenceDiagram
-    participant Sequencer
-    participant Builder Op-Node
-    participant Builder
-    participant Local Engine
+    rect rgba(0, 0, 255, 0.1)
+    participant SEQ as Sequencer
+    participant ENGINE as Local Engine
+    end
 
-    Sequencer->>Builder Op-Node: Send latest head update (p2p channel)
-    Builder Op-Node->>Builder: Publish attributes to the event stream
-    Builder->>Builder: Start building blocks
-    Sequencer->>Builder: GetPayload API request
-    Builder->>Sequencer: Return built payload
-    Sequencer->>Local Engine: Insert payload
+    rect rgba(0, 255, 0, 0.1)
+    participant BOP as Builder Op-Node
+    participant BUILDER as Builder Op-Geth
+    end
+
+    SEQ->>BOP: Send latest head update (p2p channel)
+    BOP->>BUILDER: Publish attributes to the event stream
+    BUILDER->>BUILDER: Start building blocks
+    SEQ->>BUILDER: GetPayload API request
+    BUILDER->>SEQ: Return built payload
+    SEQ->>ENGINE: Insert payload
 ```
 
 Key Components:
