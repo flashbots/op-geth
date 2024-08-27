@@ -49,6 +49,7 @@ sequenceDiagram
     BUILDER->>BUILDER: Start building blocks
     SEQ->>BUILDER: GetPayload Builder API request
     BUILDER-->>SEQ: VersionedSubmitBlockRequest
+    deactivate BUILDER
     SEQ->>ENGINE: Insert payload
 ```
 
