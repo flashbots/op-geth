@@ -34,11 +34,11 @@ A simplified sequence diagram of the process is as follows:
 
 ```mermaid
 sequenceDiagram
-    box Sequencer
+    box rgba(103, 189, 220, 0.8) Sequencer
     participant SEQ as Sequencer
     participant ENGINE as Local Engine
     end
-    box Builder
+    box rgba(210, 209, 71, 0.8) Builder
     participant BOP as Builder Op-Node
     participant BUILDER as Builder Op-Geth
     end
