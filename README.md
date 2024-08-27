@@ -17,6 +17,15 @@ We introduced a new API endpoint in the builder to get the payload for a given s
 
 * Response: A JSON object adhering to the [VersionedSubmitBlockRequest](https://github.com/attestantio/go-builder-client/blob/master/spec/versionedsubmitblockrequest.go) schema.
 
+The we are using different payload versions for following optimism fork names:
+
+| Fork Name | Payload Version |
+| --------- | --------------- |
+| Bedrock   | Bellatrix       |
+| Canyon    | Capella         |
+| Ecotone   | Deneb           |
+
+
 ### Op-Node modification
 
 Modified version of op-node is required for this builder to work. It is available in our flashbots optimism repository.
@@ -36,7 +45,7 @@ sequenceDiagram
     BOP->>BUILDER: Publish attributes to the event stream
     BUILDER->>BUILDER: Start building blocks
     SEQ->>BUILDER: GetPayload API request
-    BUILDER->>SEQ: Return built payload
+    BUILDER->>SEQ: VersionedSubmitBlockRequest
     SEQ->>ENGINE: Insert payload
 ```
 
