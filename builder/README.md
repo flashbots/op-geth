@@ -1,7 +1,7 @@
 # Flashbots Op-Geth Builder
+[![Docker hub](https://badgen.net/docker/size/flashbots/op-geth?icon=docker&label=image)](https://hub.docker.com/r/flashbots/op-geth/tags)
 
 This is an experimental project that implements the block builder for Optimism, based on [op-geth](https://github.com/ethereum-optimism/op-geth).
-[![Docker hub](https://badgen.net/docker/size/flashbots/op-geth?icon=docker&label=image)](https://hub.docker.com/r/flashbots/op-geth/tags)
 
 ## How it works
 
