@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -29,8 +30,14 @@ type testEthereumService struct {
 	testBlock          *types.Block
 }
 
-func (t *testEthereumService) BuildBlock(attrs *BuilderPayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
-	return t.testExecutableData, nil
+func (t *testEthereumService) BuildBlock(ctx context.Context, attrs *BuilderPayloadAttributes) (chan *SubmitBlockOpts, error) {
+	ch := make(chan *SubmitBlockOpts, 1)
+	ch <- &SubmitBlockOpts{ // it does not block because buffer of size 1
+		ExecutionPayloadEnvelope: t.testExecutableData,
+		SealedAt:                 time.Now(),
+		PayloadAttributes:        attrs,
+	}
+	return ch, nil
 }
 
 func (t *testEthereumService) GetBlockByHash(hash common.Hash) *types.Block { return t.testBlock }
@@ -113,7 +120,6 @@ func TestGetPayloadV1(t *testing.T) {
 	builderArgs := BuilderArgs{
 		sk:                          sk,
 		builderSigningDomain:        bDomain,
-		builderRetryInterval:        200 * time.Millisecond,
 		blockTime:                   2 * time.Second,
 		eth:                         testEthService,
 		ignoreLatePayloadAttributes: false,

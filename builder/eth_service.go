@@ -1,7 +1,9 @@
 package builder
 
 import (
+	"context"
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -14,25 +16,74 @@ import (
 )
 
 type IEthereumService interface {
-	BuildBlock(attrs *BuilderPayloadAttributes) (*engine.ExecutionPayloadEnvelope, error)
+	BuildBlock(ctx context.Context, attrs *BuilderPayloadAttributes) (chan *SubmitBlockOpts, error)
 	GetBlockByHash(hash common.Hash) *types.Block
 	Config() *params.ChainConfig
 	Synced() bool
 }
 
 type EthereumService struct {
-	eth *eth.Ethereum
-	cfg *Config
+	eth           *eth.Ethereum
+	cfg           *Config
+	retryInterval time.Duration
 }
 
 func NewEthereumService(eth *eth.Ethereum, config *Config) *EthereumService {
 	return &EthereumService{
-		eth: eth,
-		cfg: config,
+		eth:           eth,
+		cfg:           config,
+		retryInterval: 1 * time.Second,
 	}
 }
 
-func (s *EthereumService) BuildBlock(attrs *BuilderPayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
+func (s *EthereumService) WithRetryInterval(retryInterval time.Duration) {
+	s.retryInterval = retryInterval
+}
+
+func (s *EthereumService) BuildBlock(ctx context.Context, attrs *BuilderPayloadAttributes) (chan *SubmitBlockOpts, error) {
+	resCh := make(chan *SubmitBlockOpts, 1)
+
+	// The context already includes the timeout with the block time.
+	// Submission queue for the given payload attributes
+	// multiple jobs can run for different attributes fot the given slot
+	// 1. When new block is ready we check if its profit is higher than profit of last best block
+	//    if it is we set queueBest* to values of the new block and notify queueSignal channel.
+	var (
+		queueLastSubmittedHash common.Hash
+		queueBestBlockValue    *big.Int = big.NewInt(0)
+	)
+
+	// retry build block every builderBlockRetryInterval
+	go runRetryLoop(ctx, s.retryInterval, func() {
+		log.Info("retrying BuildBlock",
+			"slot", attrs.Slot,
+			"parent", attrs.HeadHash,
+			"retryInterval", s.retryInterval)
+
+		payload, err := s.buildBlockImpl(attrs)
+		if err != nil {
+			log.Warn("Failed to build block", "err", err)
+			return
+		}
+
+		sealedAt := time.Now()
+		if payload.ExecutionPayload.BlockHash != queueLastSubmittedHash && payload.BlockValue.Cmp(queueBestBlockValue) >= 0 {
+			queueLastSubmittedHash = payload.ExecutionPayload.BlockHash
+			queueBestBlockValue = payload.BlockValue
+
+			submitBlockOpts := SubmitBlockOpts{
+				ExecutionPayloadEnvelope: payload,
+				SealedAt:                 sealedAt,
+				PayloadAttributes:        attrs,
+			}
+			resCh <- &submitBlockOpts
+		}
+	})
+
+	return resCh, nil
+}
+
+func (s *EthereumService) buildBlockImpl(attrs *BuilderPayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
 	// Send a request to generate a full block in the background.
 	// The result can be obtained via the returned channel.
 	args := &miner.BuildPayloadArgs{

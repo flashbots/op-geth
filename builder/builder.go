@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"net/http"
 	_ "os"
 	"strconv"
@@ -60,8 +59,7 @@ type Builder struct {
 	builderPublicKey            phase0.BLSPubKey
 	builderSigningDomain        phase0.Domain
 
-	builderRetryInterval time.Duration
-	builderBlockTime     time.Duration
+	builderBlockTime time.Duration
 
 	slotMu        sync.Mutex
 	slotAttrs     BuilderPayloadAttributes
@@ -78,7 +76,6 @@ type Builder struct {
 type BuilderArgs struct {
 	sk                          *bls.SecretKey
 	builderSigningDomain        phase0.Domain
-	builderRetryInterval        time.Duration
 	blockTime                   time.Duration
 	eth                         IEthereumService
 	ignoreLatePayloadAttributes bool
@@ -115,7 +112,6 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		builderSecretKey:            args.sk,
 		builderPublicKey:            pk,
 		builderSigningDomain:        args.builderSigningDomain,
-		builderRetryInterval:        args.builderRetryInterval,
 		builderBlockTime:            args.blockTime,
 
 		slotCtx:       slotCtx,
@@ -396,52 +392,23 @@ func (b *Builder) handlePayloadAttributes(attrs *BuilderPayloadAttributes) error
 }
 
 func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.BLSPubKey, attrs *BuilderPayloadAttributes) {
-	ctx, cancel := context.WithTimeout(slotCtx, b.builderBlockTime)
-	defer cancel()
-
-	// Submission queue for the given payload attributes
-	// multiple jobs can run for different attributes fot the given slot
-	// 1. When new block is ready we check if its profit is higher than profit of last best block
-	//    if it is we set queueBest* to values of the new block and notify queueSignal channel.
-	var (
-		queueMu                sync.Mutex
-		queueLastSubmittedHash common.Hash
-		queueBestBlockValue    *big.Int = big.NewInt(0)
-	)
-
 	log.Info("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp), "txs", attrs.Transactions)
 
-	// retry build block every builderBlockRetryInterval
-	runRetryLoop(ctx, b.builderRetryInterval, func() {
-		log.Info("retrying BuildBlock",
-			"slot", attrs.Slot,
-			"parent", attrs.HeadHash,
-			"retryInterval", b.builderRetryInterval.String())
-		payload, err := b.eth.BuildBlock(attrs)
+	payloadGenerator, err := b.eth.BuildBlock(slotCtx, attrs)
+	if err != nil {
+		log.Error("Failed to build block", "err", err)
+		return
+	}
+
+	for {
+		submitBlockOpts := <-payloadGenerator
+		submitBlockOpts.ProposerPubkey = proposerPubkey
+
+		err := b.saveBlockSubmission(*submitBlockOpts)
 		if err != nil {
-			log.Warn("Failed to build block", "err", err)
-			return
+			log.Error("could not save block submission", "err", err)
 		}
-
-		sealedAt := time.Now()
-		queueMu.Lock()
-		defer queueMu.Unlock()
-		if payload.ExecutionPayload.BlockHash != queueLastSubmittedHash && payload.BlockValue.Cmp(queueBestBlockValue) >= 0 {
-			queueLastSubmittedHash = payload.ExecutionPayload.BlockHash
-			queueBestBlockValue = payload.BlockValue
-
-			submitBlockOpts := SubmitBlockOpts{
-				ExecutionPayloadEnvelope: payload,
-				SealedAt:                 sealedAt,
-				ProposerPubkey:           proposerPubkey,
-				PayloadAttributes:        attrs,
-			}
-			err := b.saveBlockSubmission(submitBlockOpts)
-			if err != nil {
-				log.Error("could not save block submission", "err", err)
-			}
-		}
-	})
+	}
 }
 
 func executableDataToExecutionPayload(data *engine.ExecutionPayloadEnvelope, version spec.DataVersion) (*builderApi.VersionedSubmitBlindedBlockResponse, error) {

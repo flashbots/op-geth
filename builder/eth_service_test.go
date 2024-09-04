@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -92,7 +93,11 @@ func TestBuildBlock(t *testing.T) {
 
 	service := NewEthereumService(ethservice, &DefaultConfig)
 
-	executableData, err := service.BuildBlock(testPayloadAttributes)
+	payloadGenerator, err := service.BuildBlock(context.Background(), testPayloadAttributes)
+	require.NoError(t, err)
+
+	payload := <-payloadGenerator
+	executableData := payload.ExecutionPayloadEnvelope
 
 	require.Equal(t, common.Address{0x04, 0x10}, executableData.ExecutionPayload.FeeRecipient)
 	require.Equal(t, common.Hash{0x05, 0x10}, executableData.ExecutionPayload.Random)

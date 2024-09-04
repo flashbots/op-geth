@@ -106,12 +106,12 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 	} else {
 		builderRetryInterval = RetryIntervalDefault
 	}
+	ethereumService.WithRetryInterval(builderRetryInterval)
 
 	builderArgs := BuilderArgs{
 		sk:                          builderSk,
 		eth:                         ethereumService,
 		builderSigningDomain:        builderSigningDomain,
-		builderRetryInterval:        builderRetryInterval,
 		ignoreLatePayloadAttributes: cfg.IgnoreLatePayloadAttributes,
 		beaconClient:                beaconClient,
 		blockTime:                   cfg.BlockTime,
