@@ -29,6 +29,8 @@ sequenceDiagram
     OPS ->> EES: engine_forkchoiceUpdated
 ```
 
+The proposer and builder uses ECDSA secp256k1 signatures to authenticate the proposer and verify the authenticity of the payload from the builder.
+
 ## Components
 
 There are two main components of the builder.
