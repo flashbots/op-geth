@@ -47,6 +47,8 @@ type BuildPayloadArgs struct {
 	NoTxPool     bool                 // Optimism addition: option to disable tx pool contents from being included
 	Transactions []*types.Transaction // Optimism addition: txs forced into the block via engine API
 	GasLimit     *uint64              // Optimism addition: override gas limit of the block to build
+
+	ExtraData []byte // Flashbots addition: extra data to include in the block
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -261,6 +263,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			noTxs:       true,
 			txs:         args.Transactions,
 			gasLimit:    args.GasLimit,
+			extraData:   args.ExtraData,
 		}
 		empty := miner.generateWork(emptyParams)
 		if empty.err != nil {
@@ -285,6 +288,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		noTxs:       false,
 		txs:         args.Transactions,
 		gasLimit:    args.GasLimit,
+		extraData:   args.ExtraData,
 	}
 
 	// Since we skip building the empty block when using the tx pool, we need to explicitly

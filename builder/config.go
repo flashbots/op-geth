@@ -16,6 +16,7 @@ type Config struct {
 	BeaconEndpoints             []string      `toml:",omitempty"`
 	RetryInterval               string        `toml:",omitempty"`
 	BlockTime                   time.Duration `toml:",omitempty"`
+	ExtraData                   string        `toml:",omitempty"`
 }
 
 // DefaultConfig is the default config for the builder.
@@ -28,4 +29,5 @@ var DefaultConfig = Config{
 	BeaconEndpoints:             []string{"http://127.0.0.1:5052"},
 	RetryInterval:               RetryIntervalDefault.String(),
 	BlockTime:                   BlockTimeDefault,
+	ExtraData:                   "",
 }

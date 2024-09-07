@@ -115,6 +115,7 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 		ignoreLatePayloadAttributes: cfg.IgnoreLatePayloadAttributes,
 		beaconClient:                beaconClient,
 		blockTime:                   cfg.BlockTime,
+		extraData:                   []byte(cfg.ExtraData),
 	}
 
 	builderBackend, err := NewBuilder(builderArgs)

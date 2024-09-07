@@ -725,6 +725,18 @@ var (
 		Value:    builder.RetryIntervalDefault.String(),
 		Category: flags.BuilderCategory,
 	}
+	BuilderExtraData = &cli.StringFlag{
+		Name:     "builder.extra_data",
+		Usage:    "Extra data to include in the block",
+		EnvVars:  []string{"BUILDER_EXTRA_DATA"},
+		Category: flags.BuilderCategory,
+	}
+
+	CustomChainFlag = &cli.StringFlag{
+		Name:     "chain",
+		Usage:    "Path to a custom chain specification file",
+		Category: flags.EthCategory,
+	}
 
 	// RPC settings
 	IPCDisabledFlag = &cli.BoolFlag{
@@ -1584,6 +1596,7 @@ func SetBuilderConfig(ctx *cli.Context, cfg *builder.Config) {
 
 	cfg.RetryInterval = ctx.String(BuilderBlockRetryInterval.Name)
 	cfg.BlockTime = ctx.Duration(BuilderBlockTime.Name)
+	cfg.ExtraData = ctx.String(BuilderExtraData.Name)
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
