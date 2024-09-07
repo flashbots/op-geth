@@ -46,6 +46,7 @@ func (s *EthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (*en
 		BeaconRoot:   attrs.ParentBeaconBlockRoot,
 		Transactions: attrs.Transactions,
 		NoTxPool:     attrs.NoTxPool,
+		ExtraData:    attrs.ExtraData,
 	}
 
 	payload, err := s.eth.Miner().BuildPayload(args)

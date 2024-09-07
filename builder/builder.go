@@ -61,6 +61,8 @@ type Builder struct {
 	bestBlockMu sync.Mutex
 	bestBlock   *builderTypes.VersionedBuilderPayloadResponse
 
+	extraData []byte
+
 	stop chan struct{}
 }
 
@@ -74,6 +76,7 @@ type BuilderArgs struct {
 	eth                         IEthereumService
 	ignoreLatePayloadAttributes bool
 	beaconClient                IBeaconClient
+	extraData                   []byte
 }
 
 // SubmitBlockOpts is a struct that contains all the arguments needed to submit a block to the relay
@@ -100,6 +103,8 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 
 		slotCtx:       slotCtx,
 		slotCtxCancel: slotCtxCancel,
+
+		extraData: args.extraData,
 
 		stop: make(chan struct{}, 1),
 	}, nil

@@ -185,6 +185,7 @@ var (
 		utils.BuilderBlockRetryInterval,
 		utils.BuilderBlockTime,
 		utils.BuilderProposerSigningAddress,
+		utils.BuilderExtraData,
 	}
 
 	rpcFlags = []cli.Flag{
