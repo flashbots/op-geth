@@ -391,6 +391,8 @@ func (b *Builder) handlePayloadAttributes(attrs *BuilderPayloadAttributes) error
 		b.slotCtxCancel()
 	}
 
+	attrs.ExtraData = b.extraData
+
 	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), b.builderBlockTime)
 	b.slotAttrs = *attrs
 	b.slotCtx = slotCtx
