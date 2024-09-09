@@ -269,8 +269,8 @@ func (b *Builder) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 
 	versionedExecutionPayload := &VersionedExecutionPayload{
 		Version:   bestSubmission.Version,
-		Bellatrix: bestSubmission.Bellatrix.ExecutionPayload,
-		Capella:   bestSubmission.Capella.ExecutionPayload,
+		Bellatrix: nil,
+		Capella:   nil,
 		Deneb:     bestSubmission.Deneb.ExecutionPayload,
 	}
 
