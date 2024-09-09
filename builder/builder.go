@@ -74,6 +74,29 @@ type Builder struct {
 	stop chan struct{}
 }
 
+type VersionedExecutionPayload struct {
+	Version   spec.DataVersion
+	Bellatrix *bellatrix.ExecutionPayload
+	Capella   *capella.ExecutionPayload
+	Deneb     *deneb.ExecutionPayload
+}
+
+type versionJSON struct {
+	Version spec.DataVersion `json:"version"`
+}
+
+type bellatrixVersionedExecutionPayloadJSON struct {
+	Data *bellatrix.ExecutionPayload `json:"data"`
+}
+
+type capellaVersionedExecutionPayloadJSON struct {
+	Data *capella.ExecutionPayload `json:"data"`
+}
+
+type denebVersionedExecutionPayloadJSON struct {
+	Data *deneb.ExecutionPayload `json:"data"`
+}
+
 // BuilderArgs is a struct that contains all the arguments needed to create a new Builder
 type BuilderArgs struct {
 	sk                          *bls.SecretKey
@@ -244,9 +267,16 @@ func (b *Builder) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	versionedExecutionPayload := &VersionedExecutionPayload{
+		Version:   bestSubmission.Version,
+		Bellatrix: bestSubmission.Bellatrix.ExecutionPayload,
+		Capella:   bestSubmission.Capella.ExecutionPayload,
+		Deneb:     bestSubmission.Deneb.ExecutionPayload,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(bestSubmission); err != nil {
+	if err := json.NewEncoder(w).Encode(versionedExecutionPayload); err != nil {
 		updateServeTimeHistogram("getPayload", false, time.Since(start))
 		log.Error("could not encode response", "err", err)
 		respondError(w, http.StatusInternalServerError, "could not encode response")
