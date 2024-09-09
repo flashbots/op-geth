@@ -246,7 +246,7 @@ func (b *Builder) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(bestSubmission); err != nil {
+	if err := json.NewEncoder(w).Encode(bestSubmission.Deneb.ExecutionPayload); err != nil {
 		updateServeTimeHistogram("getPayload", false, time.Since(start))
 		log.Error("could not encode response", "err", err)
 		respondError(w, http.StatusInternalServerError, "could not encode response")
