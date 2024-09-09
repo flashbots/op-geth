@@ -97,6 +97,54 @@ type denebVersionedExecutionPayloadJSON struct {
 	Data *deneb.ExecutionPayload `json:"data"`
 }
 
+func (v *VersionedExecutionPayload) MarshalJSON() ([]byte, error) {
+	version := &versionJSON{
+		Version: v.Version,
+	}
+	switch v.Version {
+	case spec.DataVersionBellatrix:
+		if v.Bellatrix == nil {
+			return nil, errors.New("no bellatrix data")
+		}
+		data := &bellatrixVersionedExecutionPayloadJSON{
+			Data: v.Bellatrix,
+		}
+		payload := struct {
+			*versionJSON
+			*bellatrixVersionedExecutionPayloadJSON
+		}{version, data}
+
+		return json.Marshal(payload)
+	case spec.DataVersionCapella:
+		if v.Capella == nil {
+			return nil, errors.New("no capella data")
+		}
+		data := &capellaVersionedExecutionPayloadJSON{
+			Data: v.Capella,
+		}
+		payload := struct {
+			*versionJSON
+			*capellaVersionedExecutionPayloadJSON
+		}{version, data}
+
+		return json.Marshal(payload)
+	case spec.DataVersionDeneb:
+		if v.Deneb == nil {
+			return nil, errors.New("no deneb data")
+		}
+		data := &denebVersionedExecutionPayloadJSON{
+			Data: v.Deneb,
+		}
+		payload := struct {
+			*versionJSON
+			*denebVersionedExecutionPayloadJSON
+		}{version, data}
+		return json.Marshal(payload)
+	default:
+		return nil, fmt.Errorf("unsupported data version %v", v.Version)
+	}
+}
+
 // BuilderArgs is a struct that contains all the arguments needed to create a new Builder
 type BuilderArgs struct {
 	sk                          *bls.SecretKey
@@ -268,10 +316,8 @@ func (b *Builder) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	}
 
 	versionedExecutionPayload := &VersionedExecutionPayload{
-		Version:   bestSubmission.Version,
-		Bellatrix: nil,
-		Capella:   nil,
-		Deneb:     bestSubmission.Deneb.ExecutionPayload,
+		Version: bestSubmission.Version,
+		Deneb:   bestSubmission.Deneb.ExecutionPayload,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
