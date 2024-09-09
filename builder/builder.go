@@ -316,7 +316,7 @@ func (b *Builder) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	}
 
 	versionedExecutionPayload := &VersionedExecutionPayload{
-		Version: bestSubmission.Version,
+		Version: spec.DataVersionDeneb,
 		Deneb:   bestSubmission.Deneb.ExecutionPayload,
 	}
 
