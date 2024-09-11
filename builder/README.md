@@ -47,6 +47,7 @@ sequenceDiagram
     end
 
     OPS-->>OPB: UnsafeHeadUpdate(P2P)
+    OPS->>EES: engine_forkchoiceUpdated(attrs=attrs)
     OPB-->>BB: SSE: PayloadAttributes
 
     activate BB
