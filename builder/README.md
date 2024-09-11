@@ -49,9 +49,10 @@ sequenceDiagram
     OPS-->>OPB: UnsafeHeadUpdate(P2P)
     OPB-->>BB: SSE: PayloadAttributes
 
-    Note right of BB: timespan for building blocks
+    activate BB
     OPS->> BB: /eth/v1/builder/payload/{slot}/{parent_hash}
     BB-->>OPS: BuilderPayload
+    deactivate BB
     OPS->>EES: engine_getPayload
     EES-->>OPS: EnginePayload
     OPS-->>OPS: choose payload
