@@ -683,10 +683,10 @@ var (
 		EnvVars:  []string{"BUILDER_IGNORE_LATE_PAYLOAD_ATTRIBUTES"},
 		Category: flags.BuilderCategory,
 	}
-	BuilderSecretKey = &cli.StringFlag{
-		Name:     "builder.secret_key",
+	BuilderSigningKey = &cli.StringFlag{
+		Name:     "builder.signing_key",
 		Usage:    "Builder key used for signing blocks",
-		EnvVars:  []string{"BUILDER_SECRET_KEY"},
+		EnvVars:  []string{"BUILDER_SIGNING_KEY"},
 		Value:    "0x2fc12ae741f29701f8e30f5de6350766c020cb80768a0ff01e6838ffd2431e11",
 		Category: flags.BuilderCategory,
 	}
@@ -695,13 +695,6 @@ var (
 		Usage:    "Listening address for builder endpoint",
 		EnvVars:  []string{"BUILDER_LISTEN_ADDR"},
 		Value:    ":28545",
-		Category: flags.BuilderCategory,
-	}
-	BuilderGenesisForkVersion = &cli.StringFlag{
-		Name:     "builder.genesis_fork_version",
-		Usage:    "Gensis fork version.",
-		EnvVars:  []string{"BUILDER_GENESIS_FORK_VERSION"},
-		Value:    "0x00000000",
 		Category: flags.BuilderCategory,
 	}
 	BuilderBeaconEndpoints = &cli.StringFlag{
@@ -724,6 +717,18 @@ var (
 		EnvVars:  []string{"BUILDER_RATE_LIMIT_RETRY_INTERVAL"},
 		Value:    builder.RetryIntervalDefault.String(),
 		Category: flags.BuilderCategory,
+	}
+	BuilderProposerSigningAddress = &cli.StringFlag{
+		Name:     "builder.proposer_signing_address",
+		Usage:    "Proposer address used for authenticating proposer messages",
+		EnvVars:  []string{"BUILDER_PROPOSER_SIGNING_ADDRESS"},
+		Category: flags.BuilderCategory,
+	}
+
+	CustomChainFlag = &cli.StringFlag{
+		Name:     "chain",
+		Usage:    "Path to a custom chain specification file",
+		Category: flags.EthCategory,
 	}
 
 	// RPC settings
@@ -1577,13 +1582,13 @@ func SetBuilderConfig(ctx *cli.Context, cfg *builder.Config) {
 		cfg.Enabled = ctx.Bool(BuilderEnabled.Name)
 	}
 	cfg.IgnoreLatePayloadAttributes = ctx.IsSet(BuilderIgnoreLatePayloadAttributes.Name)
-	cfg.BuilderSecretKey = ctx.String(BuilderSecretKey.Name)
+	cfg.BuilderSigningKey = ctx.String(BuilderSigningKey.Name)
 	cfg.ListenAddr = ctx.String(BuilderListenAddr.Name)
-	cfg.GenesisForkVersion = ctx.String(BuilderGenesisForkVersion.Name)
 	cfg.BeaconEndpoints = strings.Split(ctx.String(BuilderBeaconEndpoints.Name), ",")
 
 	cfg.RetryInterval = ctx.String(BuilderBlockRetryInterval.Name)
 	cfg.BlockTime = ctx.Duration(BuilderBlockTime.Name)
+	cfg.ProposerAddress = ctx.String(BuilderProposerSigningAddress.Name)
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
@@ -1678,6 +1683,13 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "holesky")
 	case ctx.IsSet(OPNetworkFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), ctx.String(OPNetworkFlag.Name))
+
+	case ctx.IsSet(CustomChainFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		genesis, err := readGenesisFromPath(ctx.String(CustomChainFlag.Name))
+		if err != nil {
+			Fatalf("Failed to read genesis file: %v", err)
+		}
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "custom-"+genesis.Config.ChainID.String())
 	}
 }
 
@@ -2135,6 +2147,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.NetworkId = genesis.Config.ChainID.Uint64()
 		}
 		cfg.Genesis = genesis
+
+	case ctx.IsSet(CustomChainFlag.Name):
+		genesis, _, err := initJSONChainGenesis(ctx, stack, ctx.String(CustomChainFlag.Name))
+		if err != nil {
+			Fatalf("Failed to initialize custom chain: %v", err)
+		}
+		cfg.Genesis = genesis
+		cfg.NetworkId = genesis.Config.ChainID.Uint64()
+
 	default:
 		if cfg.NetworkId == 1 {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
@@ -2520,4 +2541,47 @@ func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, read
 		config.PathDB = pathdb.Defaults
 	}
 	return triedb.NewDatabase(disk, config)
+}
+
+func readGenesisFromPath(genesisPath string) (*core.Genesis, error) {
+	file, err := os.Open(genesisPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		return nil, err
+	}
+	return genesis, nil
+}
+
+// initJSONChainGenesis based on the init command
+func initJSONChainGenesis(ctx *cli.Context, stack *node.Node, genesisPath string) (*core.Genesis, common.Hash, error) {
+	genesis, err := readGenesisFromPath(genesisPath)
+	if err != nil {
+		return nil, common.Hash{}, err
+	}
+
+	var overrides core.ChainOverrides
+	// overrides.OverrideCancun = &genesis.Config.Cancun
+	// overrides.OverrideVerkle = &genesis.Config.Verkle
+
+	chaindb, err := stack.OpenDatabaseWithFreezer("chaindata", 0, 0, ctx.String(AncientFlag.Name), "", false)
+	if err != nil {
+		return nil, common.Hash{}, err
+	}
+	defer chaindb.Close()
+
+	triedb := MakeTrieDatabase(ctx, chaindb, ctx.Bool(CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	defer triedb.Close()
+
+	_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	if err != nil {
+		return nil, common.Hash{}, err
+	}
+
+	log.Info("Successfully wrote genesis state", "database", "chaindata", "hash", hash)
+	return genesis, hash, nil
 }

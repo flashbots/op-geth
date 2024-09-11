@@ -66,6 +66,16 @@ Key Components:
 * Builder Op-Node: Op-node connected to the network to get the latest head update.
 * Builder: Flashbots block builder for Optimism.
 
+The proposer and builder uses ECDSA secp256k1 signatures to authenticate the proposer and verify the authenticity of the payload from the builder.
+
+## Components
+
+Key Components:
+* Sequencer: Optimism sequencer
+* Local Engine: Optimism vanilla op-geth engine.
+* Builder Op-Node: Op-node connected to the network to get the latest head update.
+* Builder: Flashbots block builder for Optimism.
+
 Process:
 1. Sequencer publishes the latest head update in p2p channel
 2. Builder Op-Node receives the head update and publishes the attributes to the event stream.
@@ -83,9 +93,16 @@ git clone git@github.com:flashbots/optimism.git
 
 ### Running with default flashbots/op-geth builder image.
 
+<<<<<<< HEAD
 ```shell
 $ DEVNET_BUILDER=true make devnet-up
 ```
+=======
+  * `--builder` Enable the Builder module
+  * `--builder.beacon_endpoints` list of op-node SSE event stream endpoints to subscribe from
+  * `--builder.signing_key` private key to sign requested block payloads
+  * `--builder.proposer_signing_address` signing address used to authenticate the proposer
+>>>>>>> flashbots/flashbots
 
 To additionally enable load testing through [tx-fuzz](https://github.com/MariusVanDerWijden/tx-fuzz), you can run the following command:
 
@@ -137,12 +154,15 @@ The op-geth builder requires the op-node to publish the latest attributes as ser
 
 These are the builder flags to enable the builder service in op-geth:
 
-| Flag                             | Description                                                                                  | Default Value |
-|----------------------------------|----------------------------------------------------------------------------------------------|---------------|
-| `builder`                        | Enable the builder service.                                                                  | `false`       |
-| `builder.beacon_endpoints`       | The op-node address to get the payload attributes from. Should be set to `builder-op-node`.  | `""`          |
-| `builder.block_retry_interval`   | The interval to retry building the payload.                                                  | `500ms`       |
-| `builder.block_time`             | Block time of the network.                                                                   | `2s`          |
+| Flag                               | Description                                                                                  | Default Value |
+|------------------------------------|----------------------------------------------------------------------------------------------|---------------|
+| `builder`                          | Enable the builder service.                                                                  | `false`       |
+| `builder.beacon_endpoints`         | The op-node address to get the payload attributes from. Should be set to `builder-op-node`.  | `""`          |
+| `builder.block_retry_interval`     | The interval to retry building the payload.                                                  | `500ms`       |
+| `builder.block_time`               | Block time of the network.                                                                   | `2s`          |
+| `builder.signing_key`              | private key to sign requested block payloads                                                 | `""`          |
+| `builder.proposer_signing_address` | signing address used to authenticate the proposer                                            | `""`          |
+
 
 ## Metrics
 

@@ -173,17 +173,18 @@ var (
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
 		utils.CollectWitnessFlag,
+		utils.CustomChainFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	builderApiFlags = []cli.Flag{
 		utils.BuilderEnabled,
 		utils.BuilderIgnoreLatePayloadAttributes,
-		utils.BuilderSecretKey,
+		utils.BuilderSigningKey,
 		utils.BuilderListenAddr,
-		utils.BuilderGenesisForkVersion,
 		utils.BuilderBeaconEndpoints,
 		utils.BuilderBlockRetryInterval,
 		utils.BuilderBlockTime,
+		utils.BuilderProposerSigningAddress,
 	}
 
 	rpcFlags = []cli.Flag{
