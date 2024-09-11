@@ -38,25 +38,25 @@ A simplified sequence diagram of the process is as follows:
 ```mermaid
 sequenceDiagram
     box rgba(103, 189, 220, 0.8) Sequencer
-    participant EES as Exec Engine (Proposer)
-    participant OPS as Op-Node (Proposer)
+    participant OPS as Op-Node
+    participant EES as Exec Engine
     end
     box rgba(210, 209, 71, 0.8) Builder
-    participant OPB as Op-Node (Block Builder)
+    participant OPB as Op-Node
     participant BB as Block Builder
     end
 
-    BB-->>OPB: payload_attributes events
-    OPS-->> OPB: Fork Choice Update (p2p)
-    OPB-->>BB: PayloadAttributes
+    OPS-->>OPB: UnsafeHeadUpdate(P2P)
+    OPB-->>BB: SSE: PayloadAttributes
 
     Note right of BB: timespan for building blocks
     OPS->> BB: /eth/v1/builder/payload/{slot}/{parent_hash}
     BB-->>OPS: BuilderPayload
-    OPS->> EES: engine_getPayload
-    OPS-->>OPS: SimulatePayload
-    OPS-->>OPS: ConfirmPaylaod
-    OPS ->> EES: engine_forkchoiceUpdated
+    OPS->>EES: engine_getPayload
+    EES-->>OPS: EnginePayload
+    OPS-->>OPS: choose payload
+    OPS->>EES: engine_newPayload(BuilderPayload)
+    OPS->>EES: engine_forkchoiceUpdated(attrs=nil)
 ```
 
 Key Components:
