@@ -148,14 +148,14 @@ The op-geth builder requires the op-node to publish the latest attributes as ser
 
 These are the builder flags to enable the builder service in op-geth:
 
-| Flag                               | Description                                                                                  | Default Value                                                         |
-|------------------------------------|----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| `builder`                          | Enable the builder service.                                                                  | `false`                                                               |
-| `builder.beacon_endpoints`         | The op-node address to get the payload attributes from. Should be set to `builder-op-node`.  | `""`                                                                  |
-| `builder.block_retry_interval`     | The interval to retry building the payload.                                                  | `500ms`                                                               |
-| `builder.block_time`               | Block time of the network.                                                                   | `2s`                                                                  |
-| `builder.signing_key`              | private key to sign requested block payloads                                                 | `"0x2fc12ae741f29701f8e30f5de6350766c020cb80768a0ff01e6838ffd2431e11"`|
-| `builder.proposer_signing_address` | signing address used to authenticate the proposer                                            | `""`                                                                  |
+| Flag                               | Description                                                                                  | Default Value|
+|------------------------------------|----------------------------------------------------------------------------------------------|--------------|
+| `builder`                          | Enable the builder service.                                                                  | `false`      |
+| `builder.beacon_endpoints`         | The op-node address to get the payload attributes from. Should be set to `builder-op-node`.  | `""`         |
+| `builder.block_retry_interval`     | The interval to retry building the payload.                                                  | `500ms`      |
+| `builder.block_time`               | Block time of the network.                                                                   | `2s`         |
+| `builder.signing_key`              | private key to sign requested block payloads                                                 | `""`         |
+| `builder.proposer_signing_address` | signing address used to authenticate the proposer                                            | `""`         |
 
 
 ## Metrics
