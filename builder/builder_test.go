@@ -17,14 +17,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testPayloadService struct {
+	testExecutableData *engine.ExecutionPayloadEnvelope
+}
+
+func (t *testPayloadService) ResolveFull() *engine.ExecutionPayloadEnvelope {
+	return t.testExecutableData
+}
+
 type testEthereumService struct {
 	synced             bool
 	testExecutableData *engine.ExecutionPayloadEnvelope
 	testBlock          *types.Block
 }
 
-func (t *testEthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
-	return t.testExecutableData, nil
+func (t *testEthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (IPayload, error) {
+	return &testPayloadService{
+		testExecutableData: t.testExecutableData,
+	}, nil
 }
 
 func (t *testEthereumService) GetBlockByHash(hash common.Hash) *types.Block { return t.testBlock }
@@ -104,7 +114,6 @@ func TestGetPayloadV1(t *testing.T) {
 		builderPrivateKey:           testPrivateKey,
 		builderAddress:              crypto.PubkeyToAddress(testPrivateKey.PublicKey),
 		proposerAddress:             crypto.PubkeyToAddress(testPrivateKey.PublicKey),
-		builderRetryInterval:        200 * time.Millisecond,
 		blockTime:                   2 * time.Second,
 		eth:                         testEthService,
 		ignoreLatePayloadAttributes: false,
