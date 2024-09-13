@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	_ "os"
 	"strings"
@@ -41,6 +40,10 @@ type IBuilder interface {
 	handleGetPayload(w http.ResponseWriter, req *http.Request)
 }
 
+type IPayload interface {
+	ResolveFull() *engine.ExecutionPayloadEnvelope
+}
+
 type Builder struct {
 	eth                         IEthereumService
 	ignoreLatePayloadAttributes bool
@@ -48,8 +51,7 @@ type Builder struct {
 	builderPrivateKey           *ecdsa.PrivateKey
 	builderAddress              common.Address
 
-	builderRetryInterval time.Duration
-	builderBlockTime     time.Duration
+	builderBlockTime time.Duration
 
 	proposerAddress common.Address
 
@@ -58,8 +60,8 @@ type Builder struct {
 	slotCtx       context.Context
 	slotCtxCancel context.CancelFunc
 
-	bestBlockMu sync.Mutex
-	bestBlock   *builderTypes.VersionedBuilderPayloadResponse
+	payloadMu sync.Mutex
+	payload   IPayload
 
 	extraData []byte
 
@@ -71,22 +73,11 @@ type BuilderArgs struct {
 	builderPrivateKey           *ecdsa.PrivateKey
 	builderAddress              common.Address
 	proposerAddress             common.Address
-	builderRetryInterval        time.Duration
 	blockTime                   time.Duration
 	eth                         IEthereumService
 	ignoreLatePayloadAttributes bool
 	beaconClient                IBeaconClient
 	extraData                   []byte
-}
-
-// SubmitBlockOpts is a struct that contains all the arguments needed to submit a block to the relay
-type SubmitBlockOpts struct {
-	// ExecutablePayloadEnvelope is the payload envelope that was executed
-	ExecutionPayloadEnvelope *engine.ExecutionPayloadEnvelope
-	// SealedAt is the time at which the block was sealed
-	SealedAt time.Time
-	// PayloadAttributes are the payload attributes used for block building
-	PayloadAttributes *builderTypes.PayloadAttributes
 }
 
 func NewBuilder(args BuilderArgs) (*Builder, error) {
@@ -98,7 +89,6 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		builderPrivateKey:           args.builderPrivateKey,
 		builderAddress:              args.builderAddress,
 		proposerAddress:             args.proposerAddress,
-		builderRetryInterval:        args.builderRetryInterval,
 		builderBlockTime:            args.blockTime,
 
 		slotCtx:       slotCtx,
@@ -179,13 +169,10 @@ func (b *Builder) GetPayload(request *builderTypes.BuilderPayloadRequest) (*buil
 		}
 	}
 
-	b.bestBlockMu.Lock()
-	bestBlock := b.bestBlock
-	b.bestBlockMu.Unlock()
-
-	if bestBlock == nil {
-		log.Warn("no builder submissions")
-		return nil, ErrNoPayloads
+	bestBlock, err := b.getVersionedBlockSubmission(request.Message.Slot, request.Message.ParentHash)
+	if err != nil {
+		log.Warn("error getting versioned block submission", "err", err)
+		return nil, fmt.Errorf("error getting builder block: %w", err)
 	}
 
 	if bestBlock.Message.Slot != request.Message.Slot {
@@ -274,12 +261,24 @@ func (b *Builder) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	updateServeTimeHistogram("getPayload", true, time.Since(start))
 }
 
-func (b *Builder) saveBlockSubmission(opts SubmitBlockOpts) error {
-	executionPayload := opts.ExecutionPayloadEnvelope.ExecutionPayload
+func (b *Builder) getVersionedBlockSubmission(slot uint64, parentHash common.Hash) (*builderTypes.VersionedBuilderPayloadResponse, error) {
+	var executionPayloadEnvelope *engine.ExecutionPayloadEnvelope
+	b.payloadMu.Lock()
+	if b.payload != nil {
+		executionPayloadEnvelope = b.payload.ResolveFull()
+	}
+	b.payloadMu.Unlock()
+
+	if executionPayloadEnvelope == nil {
+		return nil, fmt.Errorf("no builder block found")
+	}
+
+	executionPayload := executionPayloadEnvelope.ExecutionPayload
+
 	log.Info(
 		"saveBlockSubmission",
-		"slot", opts.PayloadAttributes.Slot,
-		"parent", opts.PayloadAttributes.HeadHash.String(),
+		"slot", slot,
+		"parent", parentHash.String(),
 		"hash", executionPayload.BlockHash.String(),
 	)
 
@@ -292,18 +291,18 @@ func (b *Builder) saveBlockSubmission(opts SubmitBlockOpts) error {
 		dataVersion = builderTypes.SpecVersionEcotone
 	}
 
-	value, overflow := uint256.FromBig(opts.ExecutionPayloadEnvelope.BlockValue)
+	value, overflow := uint256.FromBig(executionPayloadEnvelope.BlockValue)
 	if overflow {
-		return fmt.Errorf("could not set block value due to value overflow")
+		return nil, fmt.Errorf("could not set block value due to value overflow")
 	}
 
 	blockBidMsg := builderTypes.BidTrace{
-		Slot:                 opts.PayloadAttributes.Slot,
+		Slot:                 slot,
 		ParentHash:           executionPayload.ParentHash,
 		BlockHash:            executionPayload.BlockHash,
 		BuilderAddress:       b.builderAddress,
 		ProposerAddress:      b.proposerAddress,
-		ProposerFeeRecipient: opts.PayloadAttributes.SuggestedFeeRecipient,
+		ProposerFeeRecipient: executionPayload.FeeRecipient,
 		GasLimit:             executionPayload.GasLimit,
 		GasUsed:              executionPayload.GasUsed,
 		Value:                value.ToBig(),
@@ -311,7 +310,7 @@ func (b *Builder) saveBlockSubmission(opts SubmitBlockOpts) error {
 
 	signature, err := b.signBuilderBid(&blockBidMsg)
 	if err != nil {
-		return fmt.Errorf("could not sign block bid message, %w", err)
+		return nil, fmt.Errorf("could not sign block bid message, %w", err)
 	}
 
 	versionedBlockRequest := &builderTypes.VersionedBuilderPayloadResponse{
@@ -321,14 +320,10 @@ func (b *Builder) saveBlockSubmission(opts SubmitBlockOpts) error {
 		Signature:        signature,
 	}
 
-	b.bestBlockMu.Lock()
-	b.bestBlock = versionedBlockRequest
-	b.bestBlockMu.Unlock()
-
-	log.Info("saved block", "version", dataVersion.String(), "slot", opts.PayloadAttributes.Slot, "value", opts.ExecutionPayloadEnvelope.BlockValue.String(),
+	log.Info("resolved block", "version", dataVersion.String(), "slot", slot, "value", executionPayloadEnvelope.BlockValue,
 		"parent", executionPayload.ParentHash.String(), "hash", executionPayload.BlockHash)
 
-	return nil
+	return versionedBlockRequest, nil
 }
 
 func (b *Builder) signBuilderBid(bid *builderTypes.BidTrace) ([]byte, error) {
@@ -386,49 +381,14 @@ func (b *Builder) handlePayloadAttributes(attrs *builderTypes.PayloadAttributes)
 }
 
 func (b *Builder) runBuildingJob(slotCtx context.Context, attrs *builderTypes.PayloadAttributes) {
-	ctx, cancel := context.WithTimeout(slotCtx, b.builderBlockTime)
-	defer cancel()
-
-	// Submission queue for the given payload attributes
-	// multiple jobs can run for different attributes fot the given slot
-	// 1. When new block is ready we check if its profit is higher than profit of last best block
-	//    if it is we set queueBest* to values of the new block and notify queueSignal channel.
-	var (
-		queueMu                sync.Mutex
-		queueLastSubmittedHash common.Hash
-		queueBestBlockValue    *big.Int = big.NewInt(0)
-	)
-
 	log.Info("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp), "txs", attrs.Transactions)
 
-	// retry build block every builderBlockRetryInterval
-	runRetryLoop(ctx, b.builderRetryInterval, func() {
-		log.Info("retrying BuildBlock",
-			"slot", attrs.Slot,
-			"parent", attrs.HeadHash,
-			"retryInterval", b.builderRetryInterval.String())
-		payload, err := b.eth.BuildBlock(attrs)
-		if err != nil {
-			log.Warn("Failed to build block", "err", err)
-			return
-		}
-
-		sealedAt := time.Now()
-		queueMu.Lock()
-		defer queueMu.Unlock()
-		if payload.ExecutionPayload.BlockHash != queueLastSubmittedHash && payload.BlockValue.Cmp(queueBestBlockValue) >= 0 {
-			queueLastSubmittedHash = payload.ExecutionPayload.BlockHash
-			queueBestBlockValue = payload.BlockValue
-
-			submitBlockOpts := SubmitBlockOpts{
-				ExecutionPayloadEnvelope: payload,
-				SealedAt:                 sealedAt,
-				PayloadAttributes:        attrs,
-			}
-			err := b.saveBlockSubmission(submitBlockOpts)
-			if err != nil {
-				log.Error("could not save block submission", "err", err)
-			}
-		}
-	})
+	payload, err := b.eth.BuildBlock(attrs)
+	if err != nil {
+		log.Warn("Failed to build block", "err", err)
+		return
+	}
+	b.payloadMu.Lock()
+	b.payload = payload
+	b.payloadMu.Unlock()
 }

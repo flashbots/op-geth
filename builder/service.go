@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net/http"
-	"time"
 
 	builderTypes "github.com/ethereum/go-ethereum/builder/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -75,17 +74,6 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 
 	ethereumService := NewEthereumService(backend, cfg)
 
-	var builderRetryInterval time.Duration
-	if cfg.RetryInterval != "" {
-		d, err := time.ParseDuration(cfg.RetryInterval)
-		if err != nil {
-			return fmt.Errorf("error parsing builder retry interval - %v", err)
-		}
-		builderRetryInterval = d
-	} else {
-		builderRetryInterval = RetryIntervalDefault
-	}
-
 	builderPrivateKey, err := crypto.HexToECDSA(cfg.BuilderSigningKey)
 	if err != nil {
 		return fmt.Errorf("invalid builder private key: %w", err)
@@ -109,7 +97,6 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 		builderAddress:              builderAddress,
 		proposerAddress:             proposerAddress,
 		eth:                         ethereumService,
-		builderRetryInterval:        builderRetryInterval,
 		ignoreLatePayloadAttributes: cfg.IgnoreLatePayloadAttributes,
 		beaconClient:                beaconClient,
 		blockTime:                   cfg.BlockTime,

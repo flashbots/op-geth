@@ -177,14 +177,13 @@ var (
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	builderApiFlags = []cli.Flag{
-		utils.BuilderEnabled,
-		utils.BuilderIgnoreLatePayloadAttributes,
-		utils.BuilderSigningKey,
-		utils.BuilderListenAddr,
-		utils.BuilderBeaconEndpoints,
-		utils.BuilderBlockRetryInterval,
-		utils.BuilderBlockTime,
-		utils.BuilderProposerSigningAddress,
+		utils.BuilderEnabledFlag,
+		utils.BuilderIgnoreLatePayloadAttributesFlag,
+		utils.BuilderSigningKeyFlag,
+		utils.BuilderListenAddrFlag,
+		utils.BuilderBeaconEndpointsFlag,
+		utils.BuilderBlockTimeFlag,
+		utils.BuilderProposerSigningAddressFlag,
 		utils.BuilderExtraData,
 	}
 

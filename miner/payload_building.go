@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -94,8 +95,9 @@ type Payload struct {
 	lock     sync.Mutex
 	cond     *sync.Cond
 
-	err      error
-	stopOnce sync.Once
+	err       error
+	stopOnce  sync.Once
+	interrupt *atomic.Int32 // interrupt signal shared with worker
 }
 
 // newPayload initializes the payload object.
@@ -104,6 +106,8 @@ func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 		id:    id,
 		empty: empty,
 		stop:  make(chan struct{}),
+
+		interrupt: new(atomic.Int32),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -206,6 +210,10 @@ func (payload *Payload) resolve(onlyFull bool) *engine.ExecutionPayloadEnvelope 
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
+	// We interrupt any active building block to prevent it from adding more transactions,
+	// and if it is an update, don't attempt to seal the block.
+	payload.interruptBuilding()
+
 	if payload.full == nil && (onlyFull || payload.empty == nil) {
 		select {
 		case <-payload.stop:
@@ -229,6 +237,24 @@ func (payload *Payload) resolve(onlyFull bool) *engine.ExecutionPayloadEnvelope 
 		log.Error("Error building any payload", "id", payload.id, "err", err)
 	}
 	return nil
+}
+
+// interruptBuilding sets an interrupt for a potentially ongoing
+// block building process.
+// This will prevent it from adding new transactions to the block, and if it is
+// building an update, the block will also not be sealed, as we would discard
+// the update anyways.
+// interruptBuilding is safe to be called concurrently.
+func (payload *Payload) interruptBuilding() {
+	// Set the interrupt if not interrupted already.
+	// It's ok if it has either already been interrupted by payload resolution earlier,
+	// or by the timeout timer set to commitInterruptTimeout.
+	if payload.interrupt.CompareAndSwap(commitInterruptNone, commitInterruptResolve) {
+		log.Debug("Interrupted payload building.", "id", payload.id)
+	} else {
+		log.Debug("Payload building already interrupted.",
+			"id", payload.id, "interrupt", payload.interrupt.Load())
+	}
 }
 
 // stopBuilding signals to the block updating routine to stop. An ongoing payload
@@ -297,6 +323,8 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, extraData []byte) (*Pay
 	}
 
 	payload := newPayload(nil, args.Id())
+	// set shared interrupt
+	fullParams.interrupt = payload.interrupt
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
@@ -325,7 +353,12 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, extraData []byte) (*Pay
 		updatePayload := func() time.Duration {
 			start := time.Now()
 			// getSealingBlock is interrupted by shared interrupt
-			r := miner.generateWork(fullParams)
+			var r *newPayloadResult
+			if miner.config.BuilderEnabled {
+				r = miner.generateBuilderWork(fullParams)
+			} else {
+				r = miner.generateWork(fullParams)
+			}
 			dur := time.Since(start)
 			// update handles error case
 			payload.update(r, dur)

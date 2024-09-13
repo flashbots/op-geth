@@ -405,3 +405,7 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 func (b *backendMock) Engine() consensus.Engine          { return nil }
 func (b *backendMock) HistoricalRPCService() *rpc.Client { return nil }
 func (b *backendMock) Genesis() *types.Block             { return nil }
+
+func (b *backendMock) SendBundle(ctx context.Context, txs types.Transactions, blockNumber rpc.BlockNumber, minTimestamp uint64, maxTimestamp uint64, revertingTxHashes []common.Hash) (common.Hash, error) {
+	return common.Hash{}, nil
+}

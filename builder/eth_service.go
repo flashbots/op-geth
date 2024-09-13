@@ -1,21 +1,16 @@
 package builder
 
 import (
-	"errors"
-	"time"
-
-	"github.com/ethereum/go-ethereum/beacon/engine"
 	builderTypes "github.com/ethereum/go-ethereum/builder/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 type IEthereumService interface {
-	BuildBlock(attrs *builderTypes.PayloadAttributes) (*engine.ExecutionPayloadEnvelope, error)
+	BuildBlock(attrs *builderTypes.PayloadAttributes) (IPayload, error)
 	GetBlockByHash(hash common.Hash) *types.Block
 	Config() *params.ChainConfig
 	Synced() bool
@@ -33,7 +28,7 @@ func NewEthereumService(eth *eth.Ethereum, config *Config) *EthereumService {
 	}
 }
 
-func (s *EthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
+func (s *EthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (IPayload, error) {
 	// Send a request to generate a full block in the background.
 	// The result can be obtained via the returned channel.
 	args := &miner.BuildPayloadArgs{
@@ -48,31 +43,7 @@ func (s *EthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (*en
 		NoTxPool:     attrs.NoTxPool,
 	}
 
-	payload, err := s.eth.Miner().BuildPayloadWithExtraData(args, attrs.ExtraData)
-	if err != nil {
-		log.Error("Failed to build payload", "err", err)
-		return nil, err
-	}
-
-	resCh := make(chan *engine.ExecutionPayloadEnvelope, 1)
-	go func() {
-		resCh <- payload.ResolveFull()
-	}()
-
-	timer := time.NewTimer(s.cfg.BlockTime)
-	defer timer.Stop()
-
-	select {
-	case payload := <-resCh:
-		if payload == nil {
-			return nil, errors.New("received nil payload from sealing work")
-		}
-		return payload, nil
-	case <-timer.C:
-		payload.Cancel()
-		log.Error("timeout waiting for block", "parent hash", attrs.HeadHash, "slot", attrs.Slot)
-		return nil, errors.New("timeout waiting for block result")
-	}
+	return s.eth.Miner().BuildPayloadWithExtraData(args, attrs.ExtraData)
 }
 
 func (s *EthereumService) GetBlockByHash(hash common.Hash) *types.Block {

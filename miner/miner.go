@@ -57,6 +57,8 @@ type Config struct {
 
 	RollupComputePendingBlock bool   // Compute the pending block from tx-pool, instead of copying the latest-block
 	EffectiveGasCeil          uint64 // if non-zero, a gas ceiling to apply independent of the header's gaslimit value
+
+	BuilderEnabled bool
 }
 
 // DefaultConfig contains default settings for miner.
