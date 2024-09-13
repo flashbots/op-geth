@@ -101,6 +101,8 @@ type generateParams struct {
 	gasLimit  *uint64            // Optional gas limit override
 	interrupt *atomic.Int32      // Optional interruption signal to pass down to worker.generateWork
 	isUpdate  bool               // Optional flag indicating that this is building a discardable update
+
+	extraData []byte // Extra data to include in the block
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -197,9 +199,10 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
-	// Set the extra field.
-	if len(miner.config.ExtraData) != 0 && miner.chainConfig.Optimism == nil { // Optimism chains must not set any extra data.
-		header.Extra = miner.config.ExtraData
+	// Set the extra field if specified.
+	if len(genParams.extraData) != 0 {
+		log.Debug("Setting extra data", "extraData", genParams.extraData)
+		header.Extra = genParams.extraData
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {

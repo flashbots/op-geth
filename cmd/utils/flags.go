@@ -717,6 +717,12 @@ var (
 		EnvVars:  []string{"BUILDER_PROPOSER_SIGNING_ADDRESS"},
 		Category: flags.BuilderCategory,
 	}
+	BuilderExtraData = &cli.StringFlag{
+		Name:     "builder.extra_data",
+		Usage:    "Extra data to include in the block",
+		EnvVars:  []string{"BUILDER_EXTRA_DATA"},
+		Category: flags.BuilderCategory,
+	}
 
 	CustomChainFlag = &cli.StringFlag{
 		Name:     "chain",
@@ -1581,6 +1587,7 @@ func SetBuilderConfig(ctx *cli.Context, cfg *builder.Config) {
 
 	cfg.BlockTime = ctx.Duration(BuilderBlockTimeFlag.Name)
 	cfg.ProposerAddress = ctx.String(BuilderProposerSigningAddressFlag.Name)
+	cfg.ExtraData = ctx.String(BuilderExtraData.Name)
 }
 
 // SetNodeConfig applies node-related command line flags to the config.

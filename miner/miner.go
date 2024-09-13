@@ -154,7 +154,12 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 
 // BuildPayload builds the payload according to the provided parameters.
 func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
-	return miner.buildPayload(args)
+	return miner.buildPayload(args, nil)
+}
+
+// BuildPayloadWithExtraData builds the payload according to the provided parameters and extra data.
+func (miner *Miner) BuildPayloadWithExtraData(args *BuildPayloadArgs, extra []byte) (*Payload, error) {
+	return miner.buildPayload(args, extra)
 }
 
 // getPending retrieves the pending block based on the current head block.

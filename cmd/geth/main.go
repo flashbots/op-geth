@@ -184,6 +184,7 @@ var (
 		utils.BuilderBeaconEndpointsFlag,
 		utils.BuilderBlockTimeFlag,
 		utils.BuilderProposerSigningAddressFlag,
+		utils.BuilderExtraData,
 	}
 
 	rpcFlags = []cli.Flag{

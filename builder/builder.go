@@ -63,6 +63,8 @@ type Builder struct {
 	payloadMu sync.Mutex
 	payload   IPayload
 
+	extraData []byte
+
 	stop chan struct{}
 }
 
@@ -75,6 +77,7 @@ type BuilderArgs struct {
 	eth                         IEthereumService
 	ignoreLatePayloadAttributes bool
 	beaconClient                IBeaconClient
+	extraData                   []byte
 }
 
 func NewBuilder(args BuilderArgs) (*Builder, error) {
@@ -90,6 +93,8 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 
 		slotCtx:       slotCtx,
 		slotCtxCancel: slotCtxCancel,
+
+		extraData: args.extraData,
 
 		stop: make(chan struct{}, 1),
 	}, nil
@@ -363,6 +368,8 @@ func (b *Builder) handlePayloadAttributes(attrs *builderTypes.PayloadAttributes)
 	if b.slotCtxCancel != nil {
 		b.slotCtxCancel()
 	}
+
+	attrs.ExtraData = b.extraData
 
 	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), b.builderBlockTime)
 	b.slotAttrs = *attrs

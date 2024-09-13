@@ -19,6 +19,8 @@ type PayloadAttributes struct {
 
 	NoTxPool     bool                 `json:"noTxPool,omitempty"` // Optimism addition: option to disable tx pool contents from being included
 	Transactions []*types.Transaction `json:"transactions"`       // Optimism addition: txs forced into the block via engine API
+
+	ExtraData []byte `json:"extraData,omitempty"` // Flashbots addition: extra data to include in the block
 }
 
 func (attrs *PayloadAttributes) Equal(other *PayloadAttributes) bool {
@@ -38,6 +40,10 @@ func (attrs *PayloadAttributes) Equal(other *PayloadAttributes) bool {
 	}
 
 	if !slices.Equal(attrs.Transactions, other.Transactions) {
+		return false
+	}
+
+	if !slices.Equal(attrs.ExtraData, other.ExtraData) {
 		return false
 	}
 

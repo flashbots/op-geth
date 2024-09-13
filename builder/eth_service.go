@@ -42,7 +42,8 @@ func (s *EthereumService) BuildBlock(attrs *builderTypes.PayloadAttributes) (IPa
 		Transactions: attrs.Transactions,
 		NoTxPool:     attrs.NoTxPool,
 	}
-	return s.eth.Miner().BuildPayload(args)
+
+	return s.eth.Miner().BuildPayloadWithExtraData(args, attrs.ExtraData)
 }
 
 func (s *EthereumService) GetBlockByHash(hash common.Hash) *types.Block {
