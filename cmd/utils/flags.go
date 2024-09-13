@@ -671,54 +671,47 @@ var (
 	}
 
 	// Builder API settings
-	BuilderEnabled = &cli.BoolFlag{
+	BuilderEnabledFlag = &cli.BoolFlag{
 		Name:     "builder",
 		Usage:    "Enable the builder",
 		EnvVars:  []string{"BUILDER_ENABLED"},
 		Category: flags.BuilderCategory,
 	}
-	BuilderIgnoreLatePayloadAttributes = &cli.BoolFlag{
+	BuilderIgnoreLatePayloadAttributesFlag = &cli.BoolFlag{
 		Name:     "builder.ignore_late_payload_attributes",
 		Usage:    "Builder will ignore all but the first payload attributes. Use if your CL sends non-canonical head updates.",
 		EnvVars:  []string{"BUILDER_IGNORE_LATE_PAYLOAD_ATTRIBUTES"},
 		Category: flags.BuilderCategory,
 	}
-	BuilderSigningKey = &cli.StringFlag{
+	BuilderSigningKeyFlag = &cli.StringFlag{
 		Name:     "builder.signing_key",
 		Usage:    "Builder key used for signing blocks",
 		EnvVars:  []string{"BUILDER_SIGNING_KEY"},
 		Value:    "0x2fc12ae741f29701f8e30f5de6350766c020cb80768a0ff01e6838ffd2431e11",
 		Category: flags.BuilderCategory,
 	}
-	BuilderListenAddr = &cli.StringFlag{
+	BuilderListenAddrFlag = &cli.StringFlag{
 		Name:     "builder.listen_addr",
 		Usage:    "Listening address for builder endpoint",
 		EnvVars:  []string{"BUILDER_LISTEN_ADDR"},
 		Value:    ":28545",
 		Category: flags.BuilderCategory,
 	}
-	BuilderBeaconEndpoints = &cli.StringFlag{
+	BuilderBeaconEndpointsFlag = &cli.StringFlag{
 		Name:     "builder.beacon_endpoints",
 		Usage:    "Comma separated list of beacon endpoints to connect to for beacon chain data",
 		EnvVars:  []string{"BUILDER_BEACON_ENDPOINTS"},
 		Value:    "http://127.0.0.1:5052",
 		Category: flags.BuilderCategory,
 	}
-	BuilderBlockTime = &cli.DurationFlag{
+	BuilderBlockTimeFlag = &cli.DurationFlag{
 		Name:     "builder.block_time",
 		Usage:    "Determines the block time of the network.",
 		EnvVars:  []string{"BUILDER_BLOCK_TIME"},
 		Value:    builder.BlockTimeDefault,
 		Category: flags.BuilderCategory,
 	}
-	BuilderBlockRetryInterval = &cli.StringFlag{
-		Name:     "builder.block_retry_interval",
-		Usage:    "Determines the interval at which builder will retry building a block",
-		EnvVars:  []string{"BUILDER_RATE_LIMIT_RETRY_INTERVAL"},
-		Value:    builder.RetryIntervalDefault.String(),
-		Category: flags.BuilderCategory,
-	}
-	BuilderProposerSigningAddress = &cli.StringFlag{
+	BuilderProposerSigningAddressFlag = &cli.StringFlag{
 		Name:     "builder.proposer_signing_address",
 		Usage:    "Proposer address used for authenticating proposer messages",
 		EnvVars:  []string{"BUILDER_PROPOSER_SIGNING_ADDRESS"},
@@ -1578,17 +1571,16 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 }
 
 func SetBuilderConfig(ctx *cli.Context, cfg *builder.Config) {
-	if ctx.IsSet(BuilderEnabled.Name) {
-		cfg.Enabled = ctx.Bool(BuilderEnabled.Name)
+	if ctx.IsSet(BuilderEnabledFlag.Name) {
+		cfg.Enabled = ctx.Bool(BuilderEnabledFlag.Name)
 	}
-	cfg.IgnoreLatePayloadAttributes = ctx.IsSet(BuilderIgnoreLatePayloadAttributes.Name)
-	cfg.BuilderSigningKey = ctx.String(BuilderSigningKey.Name)
-	cfg.ListenAddr = ctx.String(BuilderListenAddr.Name)
-	cfg.BeaconEndpoints = strings.Split(ctx.String(BuilderBeaconEndpoints.Name), ",")
+	cfg.IgnoreLatePayloadAttributes = ctx.IsSet(BuilderIgnoreLatePayloadAttributesFlag.Name)
+	cfg.BuilderSigningKey = ctx.String(BuilderSigningKeyFlag.Name)
+	cfg.ListenAddr = ctx.String(BuilderListenAddrFlag.Name)
+	cfg.BeaconEndpoints = strings.Split(ctx.String(BuilderBeaconEndpointsFlag.Name), ",")
 
-	cfg.RetryInterval = ctx.String(BuilderBlockRetryInterval.Name)
-	cfg.BlockTime = ctx.Duration(BuilderBlockTime.Name)
-	cfg.ProposerAddress = ctx.String(BuilderProposerSigningAddress.Name)
+	cfg.BlockTime = ctx.Duration(BuilderBlockTimeFlag.Name)
+	cfg.ProposerAddress = ctx.String(BuilderProposerSigningAddressFlag.Name)
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
@@ -1799,6 +1791,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.IsSet(RollupComputePendingBlock.Name) {
 		cfg.RollupComputePendingBlock = ctx.Bool(RollupComputePendingBlock.Name)
+	}
+	if ctx.IsSet(BuilderEnabledFlag.Name) {
+		cfg.BuilderEnabled = ctx.Bool(BuilderEnabledFlag.Name)
 	}
 }
 

@@ -28,6 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"golang.org/x/crypto/sha3"
+
+	builderTypes "github.com/ethereum/go-ethereum/builder/types"
 )
 
 type L1CostFunc func(dataGas types.RollupCostData) *big.Int
@@ -77,6 +80,9 @@ type TxPool struct {
 	term chan struct{}           // Termination channel to detect a closed pool
 
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
+
+	bundleLock sync.RWMutex // Mutex protecting the pool when adding bundles
+	mevBundles []builderTypes.MevBundle
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -481,4 +487,64 @@ func (p *TxPool) Sync() error {
 	case <-p.term:
 		return errors.New("pool already terminated")
 	}
+}
+
+func (p *TxPool) AddMevBundle(txs types.Transactions, blockNumber *big.Int, minTimestamp, maxTimestamp uint64, revertingTxHashes []common.Hash) (common.Hash, error) {
+	bundleHasher := sha3.NewLegacyKeccak256()
+	for _, tx := range txs {
+		_, err := bundleHasher.Write(tx.Hash().Bytes())
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
+	bundleHash := common.BytesToHash(bundleHasher.Sum(nil))
+
+	p.bundleLock.Lock()
+	defer p.bundleLock.Unlock()
+
+	p.mevBundles = append(p.mevBundles, builderTypes.MevBundle{
+		Txs:               txs,
+		BlockNumber:       blockNumber,
+		MinTimestamp:      minTimestamp,
+		MaxTimestamp:      maxTimestamp,
+		RevertingTxHashes: revertingTxHashes,
+		Hash:              bundleHash,
+	})
+	return bundleHash, nil
+}
+
+// MevBundles returns a list of bundles valid for the given blockNumber/blockTimestamp
+// also prunes bundles that are outdated
+// Returns regular bundles and a function resolving to current cancellable bundles
+func (p *TxPool) MevBundles(blockNumber *big.Int, blockTimestamp uint64) []builderTypes.MevBundle {
+	p.bundleLock.Lock()
+	defer p.bundleLock.Unlock()
+
+	// returned values
+	var ret []builderTypes.MevBundle
+	// rolled over values
+	var bundles []builderTypes.MevBundle
+
+	for _, bundle := range p.mevBundles {
+		// Prune outdated bundles
+		if (bundle.MaxTimestamp != 0 && blockTimestamp > bundle.MaxTimestamp) || blockNumber.Cmp(bundle.BlockNumber) > 0 {
+			continue
+		}
+
+		// Roll over future bundles
+		if (bundle.MinTimestamp != 0 && blockTimestamp < bundle.MinTimestamp) || blockNumber.Cmp(bundle.BlockNumber) < 0 {
+			bundles = append(bundles, bundle)
+			continue
+		}
+
+		// keep the bundles around internally until they need to be pruned
+		bundles = append(bundles, bundle)
+
+		// return the ones which are in time
+		ret = append(ret, bundle)
+	}
+
+	p.mevBundles = bundles
+
+	return ret
 }

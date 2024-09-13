@@ -1,12 +1,10 @@
 package builder
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"net/http"
-	"time"
 
 	builderTypes "github.com/ethereum/go-ethereum/builder/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -54,20 +52,6 @@ func respondError(w http.ResponseWriter, code int, message string) {
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(httpErrorResp{code, message}); err != nil {
 		http.Error(w, message, code)
-	}
-}
-
-// runRetryLoop calls retry periodically with the provided interval respecting context cancellation
-func runRetryLoop(ctx context.Context, interval time.Duration, retry func()) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			retry()
-		}
 	}
 }
 
