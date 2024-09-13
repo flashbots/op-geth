@@ -47,8 +47,6 @@ type BuildPayloadArgs struct {
 	NoTxPool     bool                 // Optimism addition: option to disable tx pool contents from being included
 	Transactions []*types.Transaction // Optimism addition: txs forced into the block via engine API
 	GasLimit     *uint64              // Optimism addition: override gas limit of the block to build
-
-	ExtraData []byte // Flashbots addition: extra data to include in the block
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -246,7 +244,7 @@ func (payload *Payload) stopBuilding() {
 }
 
 // buildPayload builds the payload according to the provided parameters.
-func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
+func (miner *Miner) buildPayload(args *BuildPayloadArgs, extraData []byte) (*Payload, error) {
 	if args.NoTxPool { // don't start the background payload updating job if there is no tx pool to pull from
 		// Build the initial version with no transaction included. It should be fast
 		// enough to run. The empty payload can at least make sure there is something
@@ -263,7 +261,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			noTxs:       true,
 			txs:         args.Transactions,
 			gasLimit:    args.GasLimit,
-			extraData:   args.ExtraData,
+			extraData:   extraData,
 		}
 		empty := miner.generateWork(emptyParams)
 		if empty.err != nil {
@@ -288,7 +286,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		noTxs:       false,
 		txs:         args.Transactions,
 		gasLimit:    args.GasLimit,
-		extraData:   args.ExtraData,
+		extraData:   extraData,
 	}
 
 	// Since we skip building the empty block when using the tx pool, we need to explicitly
