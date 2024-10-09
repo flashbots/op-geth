@@ -496,3 +496,10 @@ func HeaderParentHashFromRLP(header []byte) common.Hash {
 	}
 	return common.BytesToHash(parentHash)
 }
+
+func (b *Block) WithTransactions(txs Transactions) *Block {
+	// Copy the block and replace the transactions
+	b.transactions = make(Transactions, len(txs))
+	copy(b.transactions, txs)
+	return b
+}

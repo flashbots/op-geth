@@ -304,6 +304,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, config.GPO, config.Miner.GasPrice)
 
+	// FB Specific
+
+	// This is a weird recursion, miner uses iss and iss uses miner, Fix
+	issBuilder, _ := miner.NewISSBuilder(eth.miner, 250*time.Millisecond, 2*time.Second)
+	issBuilder.AddSSEStream(1122)
+	eth.miner.SetISSBuilder(issBuilder)
+	// End FB Specific
+
 	// Setup DNS discovery iterators.
 	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
 	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)

@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"go.opentelemetry.io/otel"
 )
 
 // BuildPayloadArgs contains the provided parameters for building payload.
@@ -96,6 +98,8 @@ type Payload struct {
 
 	err      error
 	stopOnce sync.Once
+
+	isISS bool
 }
 
 // newPayload initializes the payload object.
@@ -145,7 +149,9 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 	// Ensure the newly provided full block has a higher transaction fee.
 	// In post-merge stage, there is no uncle reward anymore and transaction
 	// fee(apart from the mev revenue) is the only indicator for comparison.
-	if payload.full == nil || r.fees.Cmp(payload.fullFees) > 0 {
+	// For the ISS builder we need to update always the payload
+	if payload.isISS || payload.full == nil || r.fees.Cmp(payload.fullFees) > 0 {
+		// we assume we always want the new block we are including
 		payload.full = r.block
 		payload.fullFees = r.fees
 		payload.sidecars = r.sidecars
@@ -243,8 +249,16 @@ func (payload *Payload) stopBuilding() {
 	})
 }
 
+var (
+	tracer = otel.Tracer("build-payload")
+)
+
 // buildPayload builds the payload according to the provided parameters.
-func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
+func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs) (*Payload, error) {
+	// create a trace from the context
+	subCtx, span := tracer.Start(ctx, "build-payload")
+	defer span.End()
+
 	if args.NoTxPool { // don't start the background payload updating job if there is no tx pool to pull from
 		// Build the initial version with no transaction included. It should be fast
 		// enough to run. The empty payload can at least make sure there is something
@@ -321,6 +335,9 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		}()
 
 		updatePayload := func() time.Duration {
+			_, span := tracer.Start(subCtx, "update-payload")
+			defer span.End()
+
 			start := time.Now()
 			// getSealingBlock is interrupted by shared interrupt
 			r := miner.generateWork(fullParams)

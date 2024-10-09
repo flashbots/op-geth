@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"math/big"
 	"reflect"
 	"testing"
@@ -103,6 +104,8 @@ type testWorkerBackend struct {
 	txPool  *txpool.TxPool
 	chain   *core.BlockChain
 	genesis *core.Genesis
+
+	nonce uint64
 }
 
 func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
@@ -180,7 +183,7 @@ func testBuildPayload(t *testing.T, noTxPool, interrupt bool) {
 	}
 	// payload resolution now interrupts block building, so we have to
 	// wait for the payloading building process to build its first block
-	payload, err := w.buildPayload(args)
+	payload, err := w.buildPayload(context.Background(), args)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}

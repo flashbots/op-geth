@@ -271,7 +271,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
-		log.Info("Setting new local account", "address", addr)
+		log.Debug("Setting new local account", "address", addr)
 		pool.locals.add(addr)
 	}
 	pool.priced = newPricedList(pool.all)
@@ -841,7 +841,7 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 	}
 	// Mark local addresses and journal local transactions
 	if local && !pool.locals.contains(from) {
-		log.Info("Setting new local account", "address", from)
+		log.Debug("Setting new local account", "address", from)
 		pool.locals.add(from)
 		pool.priced.Removed(pool.all.RemoteToLocals(pool.locals)) // Migrate the remotes if it's marked as local first time.
 	}

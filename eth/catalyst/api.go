@@ -18,6 +18,7 @@
 package catalyst
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -212,7 +213,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 
 // ForkchoiceUpdatedV3 is equivalent to V2 with the addition of parent beacon block root
 // in the payload attributes. It supports only PayloadAttributesV3.
-func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
 	if params != nil {
 		if params.Withdrawals == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing withdrawals"))
@@ -228,10 +229,14 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	// hash, even if params are wrong. To do this we need to split up
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
-	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
+	return api.forkchoiceUpdatedWithCtx(ctx, update, params, engine.PayloadV3, false)
 }
 
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, simulatorMode bool) (engine.ForkChoiceResponse, error) {
+	return api.forkchoiceUpdatedWithCtx(context.Background(), update, payloadAttributes, payloadVersion, simulatorMode)
+}
+
+func (api *ConsensusAPI) forkchoiceUpdatedWithCtx(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, simulatorMode bool) (engine.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
@@ -401,7 +406,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 				return valid(nil), engine.InvalidPayloadAttributes.With(err)
 			}
 		}
-		payload, err := api.eth.Miner().BuildPayload(args)
+
+		payload, err := api.eth.Miner().BuildPayloadWithCtx(ctx, args)
 		if err != nil {
 			log.Error("Failed to build payload", "err", err)
 			return valid(nil), engine.InvalidPayloadAttributes.With(err)

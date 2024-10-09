@@ -59,6 +59,8 @@ func respondError(w http.ResponseWriter, code int, message string) {
 
 // runRetryLoop calls retry periodically with the provided interval respecting context cancellation
 func runRetryLoop(ctx context.Context, interval time.Duration, retry func()) {
+	retry() // Call the callback function at the beginning
+
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {

@@ -1,0 +1,173 @@
+diff --git a/builder/eth_service.go b/builder/eth_service.go
+index 504a155e0..62f826ce0 100644
+--- a/builder/eth_service.go
++++ b/builder/eth_service.go
+@@ -3,7 +3,6 @@ package builder
+ import (
+ 	"context"
+ 	"errors"
+-	"math/big"
+ 	"time"
+ 
+ 	"github.com/ethereum/go-ethereum/beacon/engine"
+@@ -41,46 +40,78 @@ func (s *EthereumService) WithRetryInterval(retryInterval time.Duration) {
+ }
+ 
+ func (s *EthereumService) BuildBlock(ctx context.Context, attrs *BuilderPayloadAttributes) (chan *SubmitBlockOpts, error) {
+-	resCh := make(chan *SubmitBlockOpts, 1)
+-
+-	// The context already includes the timeout with the block time.
+-	// Submission queue for the given payload attributes
+-	// multiple jobs can run for different attributes fot the given slot
+-	// 1. When new block is ready we check if its profit is higher than profit of last best block
+-	//    if it is we set queueBest* to values of the new block and notify queueSignal channel.
+-	var (
+-		queueLastSubmittedHash common.Hash
+-		queueBestBlockValue    *big.Int = big.NewInt(0)
+-	)
+-
+-	// retry build block every builderBlockRetryInterval
+-	go runRetryLoop(ctx, s.retryInterval, func() {
+-		log.Info("retrying BuildBlock",
+-			"slot", attrs.Slot,
+-			"parent", attrs.HeadHash,
+-			"retryInterval", s.retryInterval)
+-
+-		payload, err := s.buildBlockImpl(attrs)
++	// Just delegate on the miner to create the block
++	// TODO: We can skip a lot of things if we move things to miner (i.e. retry logic)
++	args := &miner.BuildPayloadArgs{
++		Parent:       attrs.HeadHash,
++		Timestamp:    uint64(attrs.Timestamp),
++		FeeRecipient: attrs.SuggestedFeeRecipient, // TODO (builder): use builder key as fee recipient
++		GasLimit:     &attrs.GasLimit,
++		Random:       attrs.Random,
++		Withdrawals:  attrs.Withdrawals,
++		BeaconRoot:   attrs.ParentBeaconBlockRoot,
++		Transactions: attrs.Transactions,
++		NoTxPool:     attrs.NoTxPool,
++	}
++
++	ch := make(chan *SubmitBlockOpts, 1)
++	go func() {
++		payload, err := s.eth.Miner().BuildPayload(args)
+ 		if err != nil {
+-			log.Warn("Failed to build block", "err", err)
+-			return
++			panic(err)
+ 		}
++		envelope := payload.ResolveFull() // This does not ensure it builds blocks because once we call ResolveFull it stops building blocks.
++		ch <- &SubmitBlockOpts{
++			ExecutionPayloadEnvelope: envelope,
++			SealedAt:                 time.Now(),
++			PayloadAttributes:        attrs,
++		}
++	}()
+ 
+-		sealedAt := time.Now()
+-		if payload.ExecutionPayload.BlockHash != queueLastSubmittedHash && payload.BlockValue.Cmp(queueBestBlockValue) >= 0 {
+-			queueLastSubmittedHash = payload.ExecutionPayload.BlockHash
+-			queueBestBlockValue = payload.BlockValue
++	return ch, nil
++
++	/*
++		resCh := make(chan *SubmitBlockOpts, 1)
++
++		// The context already includes the timeout with the block time.
++		// Submission queue for the given payload attributes
++		// multiple jobs can run for different attributes fot the given slot
++		// 1. When new block is ready we check if its profit is higher than profit of last best block
++		//    if it is we set queueBest* to values of the new block and notify queueSignal channel.
++		var (
++			queueLastSubmittedHash common.Hash
++			queueBestBlockValue    *big.Int = big.NewInt(0)
++		)
++
++		// retry build block every builderBlockRetryInterval
++		go runRetryLoop(ctx, s.retryInterval, func() {
++			log.Info("retrying BuildBlock",
++				"slot", attrs.Slot,
++				"parent", attrs.HeadHash,
++				"retryInterval", s.retryInterval)
++
++			payload, err := s.buildBlockImpl(attrs)
++			if err != nil {
++				log.Warn("Failed to build block", "err", err)
++				return
++			}
+ 
+-			submitBlockOpts := SubmitBlockOpts{
+-				ExecutionPayloadEnvelope: payload,
+-				SealedAt:                 sealedAt,
+-				PayloadAttributes:        attrs,
++			sealedAt := time.Now()
++			if payload.ExecutionPayload.BlockHash != queueLastSubmittedHash && payload.BlockValue.Cmp(queueBestBlockValue) >= 0 {
++				queueLastSubmittedHash = payload.ExecutionPayload.BlockHash
++				queueBestBlockValue = payload.BlockValue
++
++				submitBlockOpts := SubmitBlockOpts{
++					ExecutionPayloadEnvelope: payload,
++					SealedAt:                 sealedAt,
++					PayloadAttributes:        attrs,
++				}
++				resCh <- &submitBlockOpts
+ 			}
+-			resCh <- &submitBlockOpts
+-		}
+-	})
++		})
+ 
+-	return resCh, nil
++		return resCh, nil
++	*/
+ }
+ 
+ func (s *EthereumService) buildBlockImpl(attrs *BuilderPayloadAttributes) (*engine.ExecutionPayloadEnvelope, error) {
+diff --git a/miner/miner.go b/miner/miner.go
+index 8368b96e1..8883a6c74 100644
+--- a/miner/miner.go
++++ b/miner/miner.go
+@@ -84,6 +84,8 @@ type Miner struct {
+ 	pendingMu   sync.Mutex // Lock protects the pending block
+ 
+ 	backend Backend
++
++	issBuilder *ISSBuilder
+ }
+ 
+ // New creates a new miner with provided config.
+@@ -99,6 +101,10 @@ func New(eth Backend, config Config, engine consensus.Engine) *Miner {
+ 	}
+ }
+ 
++func (miner *Miner) SetISSBuilder(issBuilder *ISSBuilder) {
++	miner.issBuilder = issBuilder
++}
++
+ // Pending returns the currently pending block and associated receipts, logs
+ // and statedb. The returned values can be nil in case the pending block is
+ // not initialized.
+@@ -152,6 +158,10 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
+ 
+ // BuildPayload builds the payload according to the provided parameters.
+ func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
++	if miner.issBuilder != nil {
++		return miner.issBuilder.Build(args)
++	}
++
+ 	return miner.buildPayload(args)
+ }
+ 
+diff --git a/miner/payload_building_test.go b/miner/payload_building_test.go
+index 316ca93fc..5df73dce6 100644
+--- a/miner/payload_building_test.go
++++ b/miner/payload_building_test.go
+@@ -103,6 +103,8 @@ type testWorkerBackend struct {
+ 	txPool  *txpool.TxPool
+ 	chain   *core.BlockChain
+ 	genesis *core.Genesis
++
++	nonce uint64
+ }
+ 
+ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {

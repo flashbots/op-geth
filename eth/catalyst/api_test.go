@@ -1615,7 +1615,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	fcState := engine.ForkchoiceStateV1{
 		HeadBlockHash: parent.Hash(),
 	}
-	resp, err := api.ForkchoiceUpdatedV3(fcState, &blockParams)
+	resp, err := api.ForkchoiceUpdatedV3(context.Background(), fcState, &blockParams)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err.(*engine.EngineAPIError).ErrorData())
 	}
@@ -1648,7 +1648,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	}
 
 	fcState.HeadBlockHash = execData.ExecutionPayload.BlockHash
-	resp, err = api.ForkchoiceUpdatedV3(fcState, nil)
+	resp, err = api.ForkchoiceUpdatedV3(context.Background(), fcState, nil)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err.(*engine.EngineAPIError).ErrorData())
 	}

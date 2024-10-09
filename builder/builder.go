@@ -395,8 +395,8 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, attrs *builderTypes.Pa
 	log.Info("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp), "txs", attrs.Transactions)
 
 	// retry build block every builderBlockRetryInterval
-	runRetryLoop(ctx, b.builderRetryInterval, func() {
-		log.Info("retrying BuildBlock",
+	runRetryLoop(ctx, 100*time.Second, func() {
+		log.Info("retrying ",
 			"slot", attrs.Slot,
 			"parent", attrs.HeadHash,
 			"retryInterval", b.builderRetryInterval.String())

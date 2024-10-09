@@ -30,6 +30,9 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 const (
@@ -326,6 +329,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	connInfo.HTTP.UserAgent = r.Header.Get("User-Agent")
 	ctx := r.Context()
 	ctx = context.WithValue(ctx, peerInfoContextKey{}, connInfo)
+	ctx = context.WithValue(ctx, mdHeaderKey{}, r.Header)
+
+	// Extract the trace
+	propagator := otel.GetTextMapPropagator()
+	ctx = propagator.Extract(ctx, propagation.HeaderCarrier(r.Header))
 
 	// All checks passed, create a codec that reads directly from the request body
 	// until EOF, writes the response to w, and orders the server to process a

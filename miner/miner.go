@@ -84,6 +84,8 @@ type Miner struct {
 	pendingMu   sync.Mutex // Lock protects the pending block
 
 	backend Backend
+
+	issBuilder *ISSBuilder
 }
 
 // New creates a new miner with provided config.
@@ -99,10 +101,19 @@ func New(eth Backend, config Config, engine consensus.Engine) *Miner {
 	}
 }
 
+// SetISSBuilder sets the ISS builder for the miner.
+func (miner *Miner) SetISSBuilder(builder *ISSBuilder) {
+	miner.issBuilder = builder // FOR NOW, to test the traces
+}
+
 // Pending returns the currently pending block and associated receipts, logs
 // and statedb. The returned values can be nil in case the pending block is
 // not initialized.
 func (miner *Miner) Pending() (*types.Block, types.Receipts, *state.StateDB) {
+	if miner.issBuilder != nil {
+		return miner.issBuilder.PendingBlock()
+	}
+
 	if miner.chainConfig.Optimism != nil && !miner.config.RollupComputePendingBlock {
 		// For compatibility when not computing a pending block, we serve the latest block as "pending"
 		headHeader := miner.chain.CurrentHeader()
@@ -150,9 +161,19 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 	return nil
 }
 
+func (miner *Miner) BuildPayloadWithCtx(ctx context.Context, args *BuildPayloadArgs) (*Payload, error) {
+	if miner.issBuilder != nil && !args.NoTxPool {
+		return miner.issBuilder.Build(ctx, args)
+	}
+	return miner.buildPayload(ctx, args)
+}
+
 // BuildPayload builds the payload according to the provided parameters.
 func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
-	return miner.buildPayload(args)
+	if miner.issBuilder != nil {
+		return miner.issBuilder.Build(context.Background(), args)
+	}
+	return miner.buildPayload(context.Background(), args)
 }
 
 // getPending retrieves the pending block based on the current head block.
